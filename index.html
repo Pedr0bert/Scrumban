@@ -1,0 +1,1491 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scrumban Pessoal - Teste Produção</title>
+    
+    <!-- Ícone da Aplicação e Favicon -->
+    <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
+    <link rel="apple-touch-icon" href="assets/icon.svg">
+    
+    <!-- Google Fonts: Crimson Pro -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,300;0,400;0,600;0,700;1,400;1,600&display=swap" rel="stylesheet">
+    
+    <!-- Configuração de Tema & Prevenção de FOUC -->
+    <meta name="color-scheme" content="light dark">
+    <script>
+        (function() {
+            try {
+                const salvo = localStorage.getItem('scrumban_theme');
+                const prefereEscuro = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                if (salvo === 'dark' || (!salvo && prefereEscuro)) {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                }
+            } catch (e) {}
+        })();
+    </script>
+
+    <!-- Tailwind CSS Compilado Localmente (Offline-First) -->
+    <link rel="stylesheet" href="css/tailwind.min.css">
+
+    <!-- Estilos Customizados v3 & Dark Mode -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-offwhite text-dark font-sans h-screen w-screen flex overflow-hidden selection:bg-terracota selection:text-white">
+
+    <!-- Overlay escuro para fechar o drawer móvel ao clicar fora -->
+    <div id="mobile-drawer-overlay" onclick="fecharMobileMenu()" class="fixed inset-0 bg-dark/50 z-30 hidden md:hidden backdrop-blur-xs transition-opacity"></div>
+
+    <!-- ================= BARRA LATERAL ================= -->
+    <aside id="barra-lateral" class="w-60 border-r border-beige bg-white flex flex-col z-40 shrink-0 select-none">
+        <div class="sidebar-header px-4 py-3.5 border-b border-beige flex items-center justify-between gap-2 min-h-[61px]">
+            <div class="sidebar-text flex items-center gap-2 min-w-0">
+                <span class="w-2.5 h-2.5 rounded-full bg-musgo shrink-0"></span>
+                <h1 class="font-serif text-2xl font-bold text-dark tracking-tight truncate">Scrumban</h1>
+                <span class="text-[10px] font-mono font-bold bg-musgo/20 text-musgo px-1.5 py-0.5 rounded ml-auto">Produção</span>
+            </div>
+            <button id="btnToggleSidebar" onclick="toggleBarraLateral()" class="p-1.5 rounded-sm hover:bg-beige text-gray-500 hover:text-dark transition-colors shrink-0" title="Recolher menu lateral ([)">
+                <svg id="iconToggleSidebar" class="w-4 h-4 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path>
+                </svg>
+            </button>
+            <button onclick="fecharMobileMenu()" class="md:hidden p-1.5 rounded-sm hover:bg-beige text-gray-500 hover:text-dark transition-colors shrink-0" aria-label="Fechar menu móvel">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+
+        <!-- Navegação Principal -->
+        <nav class="flex-1 p-3 flex flex-col gap-1.5">
+            <button onclick="mudarAba('view-quadro')" id="btn-quadro" class="nav-btn w-full text-left px-3.5 py-2.5 rounded-sm font-serif text-[19px] bg-beige text-dark font-semibold transition-all flex items-center gap-2.5" title="Quadro Principal (1)">
+                <svg class="w-4 h-4 text-terracota shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path></svg>
+                <span class="sidebar-text truncate">Quadro Principal</span>
+            </button>
+            <button onclick="mudarAba('view-sprints')" id="btn-sprints" class="nav-btn w-full text-left px-3.5 py-2.5 rounded-sm font-serif text-[19px] text-gray-600 hover:bg-offwhite transition-all flex items-center gap-2.5" title="Gerenciar Sprints (2)">
+                <svg class="w-4 h-4 text-media shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span class="sidebar-text truncate">Gerenciar Sprints</span>
+            </button>
+            <button onclick="mudarAba('view-historico')" id="btn-historico" class="nav-btn w-full text-left px-3.5 py-2.5 rounded-sm font-serif text-[19px] text-gray-600 hover:bg-offwhite transition-all flex items-center gap-2.5" title="Histórico & Entregas (3)">
+                <svg class="w-4 h-4 text-musgo shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
+                <span class="sidebar-text truncate">Histórico & Entregas</span>
+            </button>
+            <button onclick="mudarAba('view-config')" id="btn-config" class="nav-btn w-full text-left px-3.5 py-2.5 rounded-sm font-serif text-[19px] text-gray-600 hover:bg-offwhite transition-all flex items-center gap-2.5" title="Configurações & Backup (4)">
+                <svg class="w-4 h-4 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                <span class="sidebar-text truncate">Configurações & Backup</span>
+            </button>
+        </nav>
+
+        <!-- Rodapé da Barra Lateral: Atalhos, Tema & Armazenamento -->
+        <div class="sidebar-footer p-3 border-t border-beige bg-offwhite/50 text-xs text-gray-500 font-serif flex flex-col gap-2">
+            <!-- Alternador de Tema (Modo Escuro / Claro) -->
+            <button id="btnToggleTema" onclick="toggleTemaDark()" class="w-full text-left px-2 py-1.5 rounded-sm hover:bg-beige text-gray-600 hover:text-dark text-xs font-sans flex items-center justify-between transition-colors cursor-pointer" title="Alternar modo escuro / claro (D)">
+                <span class="flex items-center gap-1.5 min-w-0">
+                    <span id="tema-icone" class="shrink-0 flex items-center">
+                        <svg class="w-3.5 h-3.5 text-media shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                    </span>
+                    <span id="tema-texto" class="sidebar-text truncate">Modo Escuro</span>
+                </span>
+                <span id="tema-indicador" class="sidebar-text px-1.5 py-0.5 text-[10px] font-mono bg-white border border-beige rounded shadow-2xs text-gray-500">Claro</span>
+            </button>
+            <button onclick="abrirModalAtalhos()" class="w-full text-left px-2 py-1.5 rounded-sm hover:bg-beige text-gray-600 hover:text-dark text-xs font-sans flex items-center justify-between transition-colors" title="Ver atalhos de teclado globais (?)">
+                <span class="flex items-center gap-1.5">
+                    <svg class="w-3.5 h-3.5 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                    <span class="sidebar-text truncate">Atalhos</span>
+                </span>
+                <kbd class="sidebar-text px-1.5 py-0.5 text-[10px] font-mono bg-white border border-beige rounded shadow-2xs text-gray-500">?</kbd>
+            </button>
+            <div class="flex items-center justify-between pt-1 border-t border-beige/60">
+                <span class="flex items-center gap-1.5" id="storage-status-indicator" title="Armazenamento assíncrono via IndexedDB">
+                    <span class="w-2 h-2 rounded-full bg-musgo shrink-0"></span>
+                    <span id="storage-type-label" class="sidebar-text truncate">IndexedDB</span>
+                </span>
+                <button onclick="exportarBackupJSON()" class="text-terracota hover:underline text-[11px] font-sans font-semibold shrink-0" title="Exportar Backup JSON">
+                    <span class="sidebar-text">Backup</span>
+                    <svg class="w-3.5 h-3.5 hidden sidebar-icon-backup text-terracota" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                </button>
+            </div>
+            <div id="sidebar-backup-status" class="sidebar-text text-[10.5px] text-gray-400 font-sans truncate"></div>
+        </div>
+    </aside>
+
+    <!-- ================= ÁREA DE CONTEÚDO PRINCIPAL ================= -->
+    <div class="flex-1 relative flex flex-col overflow-hidden min-w-0">
+
+        <!-- Barra Superior Mobile (< 768px) -->
+        <header id="mobile-top-bar" class="md:hidden bg-white border-b border-beige px-3.5 py-2.5 flex items-center justify-between z-20 shrink-0 select-none">
+            <div class="flex items-center gap-2">
+                <button id="btnMobileMenu" onclick="toggleMobileMenu()" class="p-1.5 -ml-1 rounded-sm hover:bg-beige text-dark" aria-label="Abrir Menu">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                </button>
+                <div class="flex items-center gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-musgo"></span>
+                    <span class="font-serif font-bold text-xl text-dark tracking-tight">Scrumban</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-1.5">
+                <button onclick="toggleTemaDark()" class="p-1.5 rounded-sm hover:bg-beige text-gray-600" title="Alternar tema">
+                    <span id="mobile-tema-icone" class="flex items-center">
+                        <svg class="w-4 h-4 text-media shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                    </span>
+                </button>
+                <button onclick="abrirModalTarefa()" class="bg-musgo hover:bg-opacity-90 text-white text-xs font-serif px-2.5 py-1.5 rounded-sm flex items-center gap-1 shadow-xs">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    <span>Nova</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- ================= ABA 1: QUADRO PRINCIPAL ================= -->
+        <div id="view-quadro" class="aba-content active-tab flex flex-col bg-offwhite">
+            
+            <!-- Cabeçalho com Contexto das Sprints -->
+            <header class="p-3.5 sm:p-4 border-b border-beige flex items-center justify-between bg-white shrink-0 gap-3 sm:gap-6 min-w-0">
+                <div class="flex items-center gap-3 sm:gap-6 min-w-0 flex-1 overflow-hidden">
+                    <!-- Sprint Passada -->
+                    <div id="header-sprint-past" class="opacity-50 border-l-2 border-musgo pl-2.5 sm:pl-3 shrink-0 hidden lg:block max-w-[140px] truncate"></div>
+                    
+                    <!-- Sprint Atual -->
+                    <div id="header-sprint-current" class="border-l-4 border-terracota pl-3 sm:pl-4 flex items-center gap-2 sm:gap-4 min-w-0 flex-1"></div>
+
+                    <!-- Sprint Futura -->
+                    <div id="header-sprint-next" class="opacity-60 border-l-2 border-beige pl-2.5 sm:pl-3 shrink-0 hidden xl:block max-w-[140px] truncate"></div>
+                </div>
+                
+                <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+                    <button onclick="abrirModalConcluirSprint()" class="border border-musgo text-musgo hover:bg-musgo hover:text-white font-serif px-3 sm:px-4 py-2 rounded-sm transition-colors text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 whitespace-nowrap shadow-xs cursor-pointer" title="Arquiva os itens em Done para o histórico e avança a sprint">
+                        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        <span class="hidden sm:inline">Concluir Sprint</span>
+                        <span class="sm:hidden">Concluir</span>
+                    </button>
+                    <button onclick="abrirModalTarefa()" class="bg-musgo hover:bg-opacity-90 text-white font-serif px-3.5 sm:px-5 py-2 rounded-sm transition-all shadow-xs shrink-0 whitespace-nowrap text-xs sm:text-sm flex items-center justify-center gap-1.5 sm:gap-2 leading-none font-semibold cursor-pointer" title="Criar nova tarefa (N)">
+                        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                        <span>Nova Tarefa</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Banner de Lembrete de Backup Preventivo (Exibido quando > 7 dias sem backup) -->
+            <div id="lembrete-backup-banner" class="hidden px-5 py-2.5 bg-[#FAF4ED] border-b border-terracota/30 text-dark flex items-center justify-between gap-4 text-xs font-serif shrink-0 transition-all">
+                <div class="flex items-center gap-2.5">
+                    <svg class="w-4 h-4 text-terracota shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    <span>
+                        <strong class="font-bold text-terracota font-sans">Lembrete de Backup:</strong>
+                        <span id="lembrete-backup-texto">Já faz mais de 7 dias desde a sua última exportação JSON. Mantenha seus dados seguros exportando uma cópia preventiva.</span>
+                    </span>
+                </div>
+                <div class="flex items-center gap-2 shrink-0 font-sans">
+                    <button onclick="executarBackupComLembrete()" class="px-3 py-1 bg-terracota hover:bg-opacity-90 text-white text-[11px] font-semibold rounded-sm shadow-xs transition-colors">
+                        Exportar Backup Agora
+                    </button>
+                    <button onclick="dispensarLembreteBackup()" class="px-2.5 py-1 text-gray-500 hover:text-dark text-[11px] transition-colors" title="Dispensar lembrete por hoje">
+                        Lembrar mais tarde
+                    </button>
+                </div>
+            </div>
+
+            <!-- Barra de Filtros e Busca Rápida -->
+            <div class="px-5 py-2.5 bg-offwhite border-b border-beige flex flex-wrap items-center justify-between gap-3 text-sm shrink-0">
+                <div class="flex flex-wrap items-center gap-3 flex-1 min-w-[280px]">
+                    <!-- Busca rápida -->
+                    <div class="relative min-w-[200px] flex-1 max-w-xs">
+                        <input type="search" id="buscaRapida" placeholder="Buscar tarefas ou notas..." class="w-full pl-8 pr-3 py-1.5 bg-white border border-beige rounded-sm text-sm font-serif focus:outline-none focus:border-terracota">
+                        <svg class="w-4 h-4 absolute left-2.5 top-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </div>
+
+                    <!-- Filtro por Projeto -->
+                    <select id="filtroProjeto" class="bg-white border border-beige rounded-sm px-3 py-1.5 text-sm font-serif text-dark focus:outline-none focus:border-terracota"></select>
+
+                    <!-- Filtro por Prioridade -->
+                    <select id="filtroPrioridade" class="bg-white border border-beige rounded-sm px-3 py-1.5 text-sm font-serif text-dark focus:outline-none focus:border-terracota">
+                        <option value="all">Todas as Prioridades</option>
+                        <option value="alta">Alta Prioridade</option>
+                        <option value="media">Média Prioridade</option>
+                        <option value="baixa">Baixa Prioridade</option>
+                    </select>
+
+                    <!-- Tracking de Prazos: Filtro e Contador de Atrasadas (Overdue) -->
+                    <button type="button" id="btnFiltroOverdue" onclick="alternarFiltroOverdue()" class="px-2.5 py-1.5 rounded-sm border text-xs font-serif font-semibold transition-all flex items-center gap-1.5 shadow-xs" title="Tracking de Prazos: clique para filtrar tarefas com prazo vencido">
+                        <span class="w-2 h-2 rounded-full bg-terracota"></span>
+                        <span id="txtFiltroOverdue">0 Atrasadas</span>
+                    </button>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <span id="wip-badge" class="text-xs font-bold bg-beige text-dark px-2.5 py-1 rounded-sm">WIP: 0/2</span>
+                </div>
+            </div>
+
+            <!-- Abas de Colunas do Kanban para Mobile (< 768px) -->
+            <div id="kanban-mobile-tabs" class="md:hidden flex items-center gap-1.5 px-3 py-2 bg-white border-b border-beige overflow-x-auto no-scrollbar shrink-0 select-none">
+                <button type="button" onclick="selecionarColunaMobile('all')" data-mobile-col="all" class="mobile-col-btn active px-3 py-1 text-xs font-serif rounded-sm border whitespace-nowrap bg-dark text-white border-dark">Todas</button>
+                <button type="button" onclick="selecionarColunaMobile('backlog')" data-mobile-col="backlog" class="mobile-col-btn px-2.5 py-1 text-xs font-serif rounded-sm border whitespace-nowrap bg-white text-dark border-beige">Backlog <span id="mcount-backlog" class="font-mono text-[10px] ml-0.5 font-bold">0</span></button>
+                <button type="button" onclick="selecionarColunaMobile('todo')" data-mobile-col="todo" class="mobile-col-btn px-2.5 py-1 text-xs font-serif rounded-sm border whitespace-nowrap bg-white text-dark border-beige">TODO <span id="mcount-todo" class="font-mono text-[10px] ml-0.5 font-bold">0</span></button>
+                <button type="button" onclick="selecionarColunaMobile('progress')" data-mobile-col="progress" class="mobile-col-btn px-2.5 py-1 text-xs font-serif rounded-sm border whitespace-nowrap bg-white text-dark border-beige">In Progress <span id="mcount-progress" class="font-mono text-[10px] ml-0.5 font-bold">0</span></button>
+                <button type="button" onclick="selecionarColunaMobile('testing')" data-mobile-col="testing" class="mobile-col-btn px-2.5 py-1 text-xs font-serif rounded-sm border whitespace-nowrap bg-white text-dark border-beige">Testing <span id="mcount-testing" class="font-mono text-[10px] ml-0.5 font-bold">0</span></button>
+                <button type="button" onclick="selecionarColunaMobile('done')" data-mobile-col="done" class="mobile-col-btn px-2.5 py-1 text-xs font-serif rounded-sm border whitespace-nowrap bg-white text-dark border-beige">Done <span id="mcount-done" class="font-mono text-[10px] ml-0.5 font-bold">0</span></button>
+            </div>
+
+            <!-- Colunas do Quadro Kanban -->
+            <main class="flex-1 p-3.5 overflow-x-auto custom-scrollbar">
+                <div id="kanban-columns-container" class="h-full flex gap-3.5 min-w-[1050px]">
+                    
+                    <!-- 1. Backlog -->
+                    <section data-column="backlog" class="kanban-column-section flex-1 w-0 flex flex-col bg-white border border-beige rounded-sm shadow-xs min-w-0 transition-all duration-200">
+                        <header onclick="toggleExpandirColuna('backlog')" class="column-header h-12 px-3.5 py-2 border-b border-beige bg-offwhite flex items-center justify-between cursor-pointer select-none group/header" title="Clique para expandir/recolher coluna (ver todas as tarefas)">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <h3 class="font-serif font-bold text-lg text-dark whitespace-nowrap">Backlog</h3>
+                                <span id="count-backlog" class="text-sm font-mono font-semibold bg-beige/80 px-2 py-0.5 rounded-sm text-gray-700">0</span>
+                                <span class="column-expanded-badge hidden text-[11px] font-serif bg-dark text-white px-2 py-0.5 rounded-sm items-center gap-1 shadow-2xs">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+                                    <span>Visualização Ampla</span>
+                                </span>
+                            </div>
+                            
+                            <!-- Ferramentas Normais -->
+                            <div class="column-header-normal-tools flex items-center gap-1.5 shrink-0">
+                                <button type="button" onclick="event.stopPropagation(); toggleExpandirColuna('backlog')" class="p-1 rounded-sm text-gray-400 hover:text-dark hover:bg-beige transition-colors" title="Expandir coluna (ver todas as tarefas)">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+                                </button>
+                            </div>
+
+                            <!-- Ferramentas em Modo Expandido -->
+                            <div class="column-header-expanded-tools hidden items-center gap-2 shrink-0">
+                                <div class="flex items-center gap-1 bg-white border border-beige rounded-sm p-0.5 shadow-2xs">
+                                    <button type="button" onclick="event.stopPropagation(); expandirColunaVizinha(-1)" class="p-1 hover:bg-beige rounded-xs text-gray-600 hover:text-dark transition-colors" title="Coluna Anterior (&larr;)">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                                    </button>
+                                    <span class="text-[11px] font-serif px-1 text-gray-500 font-medium">Navegar</span>
+                                    <button type="button" onclick="event.stopPropagation(); expandirColunaVizinha(1)" class="p-1 hover:bg-beige rounded-xs text-gray-600 hover:text-dark transition-colors" title="Próxima Coluna (&rarr;)">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                    </button>
+                                </div>
+                                <button type="button" onclick="event.stopPropagation(); recolherColunaExpandida()" class="px-2.5 py-1 bg-dark hover:bg-opacity-90 text-white rounded-sm text-xs font-serif font-semibold transition-all shadow-xs flex items-center gap-1" title="Recolher para modo normal (Esc)">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                    <span>Recolher (Esc)</span>
+                                </button>
+                            </div>
+                        </header>
+
+                        <!-- Barra Vertical para quando a coluna estiver recolhida (outra coluna expandida) -->
+                        <div onclick="expandirColuna('backlog')" class="column-collapsed-strip hidden flex-1 flex flex-col items-center justify-between py-4 px-1 bg-offwhite hover:bg-beige/60 cursor-pointer transition-colors" title="Clique para expandir Backlog">
+                            <div class="flex flex-col items-center gap-2">
+                                <span class="w-2.5 h-2.5 rounded-full bg-dark"></span>
+                                <span id="count-backlog-collapsed" class="text-xs font-mono font-bold bg-beige px-1.5 py-0.5 rounded-sm text-dark shadow-2xs">0</span>
+                            </div>
+                            <div class="py-4 font-serif font-bold text-xs tracking-wider uppercase text-gray-700 select-none writing-vertical truncate max-h-[260px]">
+                                Backlog
+                            </div>
+                            <div class="text-gray-400 hover:text-dark p-1">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+                            </div>
+                        </div>
+
+                        <div class="p-2 flex-1 overflow-y-auto flex flex-col gap-2.5 kanban-column custom-scrollbar" id="col-backlog"></div>
+                    </section>
+
+                    <!-- 2. TODO -->
+                    <section data-column="todo" class="kanban-column-section flex-1 w-0 flex flex-col bg-white border border-beige rounded-sm shadow-xs min-w-0 transition-all duration-200">
+                        <header onclick="toggleExpandirColuna('todo')" class="column-header h-12 px-3.5 py-2 border-b border-beige bg-offwhite border-t-2 border-t-dark flex items-center justify-between cursor-pointer select-none group/header" title="Clique para expandir/recolher coluna (ver todas as tarefas)">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <h3 class="font-serif font-bold text-lg text-dark whitespace-nowrap">TODO</h3>
+                                <span id="count-todo" class="text-sm font-mono font-semibold bg-beige/80 px-2 py-0.5 rounded-sm text-gray-700">0</span>
+                                <span class="column-expanded-badge hidden text-[11px] font-serif bg-dark text-white px-2 py-0.5 rounded-sm items-center gap-1 shadow-2xs">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+                                    <span>Visualização Ampla</span>
+                                </span>
+                            </div>
+                            
+                            <!-- Ferramentas Normais -->
+                            <div class="column-header-normal-tools flex items-center gap-1.5 shrink-0">
+                                <button type="button" onclick="event.stopPropagation(); toggleExpandirColuna('todo')" class="p-1 rounded-sm text-gray-400 hover:text-dark hover:bg-beige transition-colors" title="Expandir coluna (ver todas as tarefas)">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+                                </button>
+                            </div>
+
+                            <!-- Ferramentas em Modo Expandido -->
+                            <div class="column-header-expanded-tools hidden items-center gap-2 shrink-0">
+                                <div class="flex items-center gap-1 bg-white border border-beige rounded-sm p-0.5 shadow-2xs">
+                                    <button type="button" onclick="event.stopPropagation(); expandirColunaVizinha(-1)" class="p-1 hover:bg-beige rounded-xs text-gray-600 hover:text-dark transition-colors" title="Coluna Anterior (&larr;)">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                                    </button>
+                                    <span class="text-[11px] font-serif px-1 text-gray-500 font-medium">Navegar</span>
+                                    <button type="button" onclick="event.stopPropagation(); expandirColunaVizinha(1)" class="p-1 hover:bg-beige rounded-xs text-gray-600 hover:text-dark transition-colors" title="Próxima Coluna (&rarr;)">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                    </button>
+                                </div>
+                                <button type="button" onclick="event.stopPropagation(); recolherColunaExpandida()" class="px-2.5 py-1 bg-dark hover:bg-opacity-90 text-white rounded-sm text-xs font-serif font-semibold transition-all shadow-xs flex items-center gap-1" title="Recolher para modo normal (Esc)">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                    <span>Recolher (Esc)</span>
+                                </button>
+                            </div>
+                        </header>
+
+                        <!-- Ação 2.2: Ponto de Reabastecimento (Replenishment Trigger) -->
+                        <div id="alerta-reabastecimento" class="hidden px-2.5 py-1.5 bg-amber-50/90 border-b border-amber-200/80 text-amber-900 text-[11px] font-serif flex items-center gap-1.5 transition-all">
+                            <svg class="w-3.5 h-3.5 text-amber-700 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            <span class="leading-tight font-medium">Fila de TODO baixa &mdash; Puxe novas tarefas do Backlog</span>
+                        </div>
+
+                        <!-- Barra Vertical para quando a coluna estiver recolhida -->
+                        <div onclick="expandirColuna('todo')" class="column-collapsed-strip hidden flex-1 flex flex-col items-center justify-between py-4 px-1 bg-offwhite hover:bg-beige/60 cursor-pointer transition-colors" title="Clique para expandir TODO">
+                            <div class="flex flex-col items-center gap-2">
+                                <span class="w-2.5 h-2.5 rounded-full bg-dark"></span>
+                                <span id="count-todo-collapsed" class="text-xs font-mono font-bold bg-beige px-1.5 py-0.5 rounded-sm text-dark shadow-2xs">0</span>
+                            </div>
+                            <div class="py-4 font-serif font-bold text-xs tracking-wider uppercase text-gray-700 select-none writing-vertical truncate max-h-[260px]">
+                                TODO
+                            </div>
+                            <div class="text-gray-400 hover:text-dark p-1">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+                            </div>
+                        </div>
+
+                        <div class="p-2 flex-1 overflow-y-auto flex flex-col gap-2.5 kanban-column custom-scrollbar" id="col-todo"></div>
+                    </section>
+
+                    <!-- 3. In Progress (com WIP) -->
+                    <section data-column="progress" class="kanban-column-section flex-1 w-0 flex flex-col bg-white border border-beige rounded-sm shadow-xs min-w-0 transition-all duration-200">
+                        <header onclick="toggleExpandirColuna('progress')" class="column-header h-12 px-3.5 py-2 border-b border-beige bg-offwhite border-t-2 border-t-terracota flex items-center justify-between cursor-pointer select-none group/header" title="Clique para expandir/recolher coluna (ver todas as tarefas)">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <h3 class="font-serif font-bold text-lg text-terracota whitespace-nowrap">In Progress</h3>
+                                <span id="count-progress" class="text-sm font-mono font-semibold bg-terracota/15 text-terracota px-2 py-0.5 rounded-sm">0</span>
+                                <span class="column-expanded-badge hidden text-[11px] font-serif bg-terracota text-white px-2 py-0.5 rounded-sm items-center gap-1 shadow-2xs">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+                                    <span>Visualização Ampla</span>
+                                </span>
+                            </div>
+                            
+                            <!-- Ferramentas Normais -->
+                            <div class="column-header-normal-tools flex items-center gap-1.5 shrink-0">
+                                <button type="button" onclick="event.stopPropagation(); toggleExpandirColuna('progress')" class="p-1 rounded-sm text-gray-400 hover:text-dark hover:bg-beige transition-colors" title="Expandir coluna (ver todas as tarefas)">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+                                </button>
+                            </div>
+
+                            <!-- Ferramentas em Modo Expandido -->
+                            <div class="column-header-expanded-tools hidden items-center gap-2 shrink-0">
+                                <div class="flex items-center gap-1 bg-white border border-beige rounded-sm p-0.5 shadow-2xs">
+                                    <button type="button" onclick="event.stopPropagation(); expandirColunaVizinha(-1)" class="p-1 hover:bg-beige rounded-xs text-gray-600 hover:text-dark transition-colors" title="Coluna Anterior (&larr;)">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                                    </button>
+                                    <span class="text-[11px] font-serif px-1 text-gray-500 font-medium">Navegar</span>
+                                    <button type="button" onclick="event.stopPropagation(); expandirColunaVizinha(1)" class="p-1 hover:bg-beige rounded-xs text-gray-600 hover:text-dark transition-colors" title="Próxima Coluna (&rarr;)">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                    </button>
+                                </div>
+                                <button type="button" onclick="event.stopPropagation(); recolherColunaExpandida()" class="px-2.5 py-1 bg-dark hover:bg-opacity-90 text-white rounded-sm text-xs font-serif font-semibold transition-all shadow-xs flex items-center gap-1" title="Recolher para modo normal (Esc)">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                    <span>Recolher (Esc)</span>
+                                </button>
+                            </div>
+                        </header>
+
+                        <!-- Barra Vertical para quando a coluna estiver recolhida -->
+                        <div onclick="expandirColuna('progress')" class="column-collapsed-strip hidden flex-1 flex flex-col items-center justify-between py-4 px-1 bg-offwhite hover:bg-beige/60 cursor-pointer transition-colors" title="Clique para expandir In Progress">
+                            <div class="flex flex-col items-center gap-2">
+                                <span class="w-2.5 h-2.5 rounded-full bg-terracota"></span>
+                                <span id="count-progress-collapsed" class="text-xs font-mono font-bold bg-terracota/15 text-terracota px-1.5 py-0.5 rounded-sm shadow-2xs">0</span>
+                            </div>
+                            <div class="py-4 font-serif font-bold text-xs tracking-wider uppercase text-terracota select-none writing-vertical truncate max-h-[260px]">
+                                In Progress
+                            </div>
+                            <div class="text-gray-400 hover:text-dark p-1">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+                            </div>
+                        </div>
+
+                        <div class="p-2 flex-1 overflow-y-auto flex flex-col gap-2.5 kanban-column custom-scrollbar" id="col-progress"></div>
+                    </section>
+
+                    <!-- 4. Testing -->
+                    <section data-column="testing" class="kanban-column-section flex-1 w-0 flex flex-col bg-white border border-beige rounded-sm shadow-xs min-w-0 transition-all duration-200">
+                        <header onclick="toggleExpandirColuna('testing')" class="column-header h-12 px-3.5 py-2 border-b border-beige bg-offwhite border-t-2 border-t-media flex items-center justify-between cursor-pointer select-none group/header" title="Clique para expandir/recolher coluna (ver todas as tarefas)">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <h3 class="font-serif font-bold text-lg text-media whitespace-nowrap">Testing</h3>
+                                <span id="count-testing" class="text-sm font-mono font-semibold bg-beige/80 px-2 py-0.5 rounded-sm text-gray-700">0</span>
+                                <span class="column-expanded-badge hidden text-[11px] font-serif bg-media text-white px-2 py-0.5 rounded-sm items-center gap-1 shadow-2xs">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+                                    <span>Visualização Ampla</span>
+                                </span>
+                            </div>
+                            
+                            <!-- Ferramentas Normais -->
+                            <div class="column-header-normal-tools flex items-center gap-1.5 shrink-0">
+                                <button type="button" onclick="event.stopPropagation(); toggleExpandirColuna('testing')" class="p-1 rounded-sm text-gray-400 hover:text-dark hover:bg-beige transition-colors" title="Expandir coluna (ver todas as tarefas)">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+                                </button>
+                            </div>
+
+                            <!-- Ferramentas em Modo Expandido -->
+                            <div class="column-header-expanded-tools hidden items-center gap-2 shrink-0">
+                                <div class="flex items-center gap-1 bg-white border border-beige rounded-sm p-0.5 shadow-2xs">
+                                    <button type="button" onclick="event.stopPropagation(); expandirColunaVizinha(-1)" class="p-1 hover:bg-beige rounded-xs text-gray-600 hover:text-dark transition-colors" title="Coluna Anterior (&larr;)">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                                    </button>
+                                    <span class="text-[11px] font-serif px-1 text-gray-500 font-medium">Navegar</span>
+                                    <button type="button" onclick="event.stopPropagation(); expandirColunaVizinha(1)" class="p-1 hover:bg-beige rounded-xs text-gray-600 hover:text-dark transition-colors" title="Próxima Coluna (&rarr;)">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                    </button>
+                                </div>
+                                <button type="button" onclick="event.stopPropagation(); recolherColunaExpandida()" class="px-2.5 py-1 bg-dark hover:bg-opacity-90 text-white rounded-sm text-xs font-serif font-semibold transition-all shadow-xs flex items-center gap-1" title="Recolher para modo normal (Esc)">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                    <span>Recolher (Esc)</span>
+                                </button>
+                            </div>
+                        </header>
+
+                        <!-- Barra Vertical para quando a coluna estiver recolhida -->
+                        <div onclick="expandirColuna('testing')" class="column-collapsed-strip hidden flex-1 flex flex-col items-center justify-between py-4 px-1 bg-offwhite hover:bg-beige/60 cursor-pointer transition-colors" title="Clique para expandir Testing">
+                            <div class="flex flex-col items-center gap-2">
+                                <span class="w-2.5 h-2.5 rounded-full bg-media"></span>
+                                <span id="count-testing-collapsed" class="text-xs font-mono font-bold bg-beige px-1.5 py-0.5 rounded-sm text-dark shadow-2xs">0</span>
+                            </div>
+                            <div class="py-4 font-serif font-bold text-xs tracking-wider uppercase text-media select-none writing-vertical truncate max-h-[260px]">
+                                Testing
+                            </div>
+                            <div class="text-gray-400 hover:text-dark p-1">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+                            </div>
+                        </div>
+
+                        <div class="p-2 flex-1 overflow-y-auto flex flex-col gap-2.5 kanban-column custom-scrollbar" id="col-testing"></div>
+                    </section>
+
+                    <!-- 5. Done -->
+                    <section data-column="done" class="kanban-column-section flex-1 w-0 flex flex-col bg-white border border-beige rounded-sm shadow-xs min-w-0 transition-all duration-200">
+                        <header onclick="toggleExpandirColuna('done')" class="column-header h-12 px-3.5 py-2 border-b border-beige bg-offwhite border-t-2 border-t-musgo flex items-center justify-between cursor-pointer select-none group/header" title="Clique para expandir/recolher coluna (ver todas as tarefas)">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <h3 class="font-serif font-bold text-lg text-musgo whitespace-nowrap">Done</h3>
+                                <span id="count-done" class="text-sm font-mono font-semibold bg-musgo/20 text-musgo px-2 py-0.5 rounded-sm">0</span>
+                                <span class="column-expanded-badge hidden text-[11px] font-serif bg-musgo text-white px-2 py-0.5 rounded-sm items-center gap-1 shadow-2xs">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+                                    <span>Visualização Ampla</span>
+                                </span>
+                            </div>
+                            
+                            <!-- Ferramentas Normais -->
+                            <div class="column-header-normal-tools flex items-center gap-1.5 shrink-0">
+                                <button type="button" onclick="event.stopPropagation(); toggleExpandirColuna('done')" class="p-1 rounded-sm text-gray-400 hover:text-dark hover:bg-beige transition-colors" title="Expandir coluna (ver todas as tarefas)">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+                                </button>
+                            </div>
+
+                            <!-- Ferramentas em Modo Expandido -->
+                            <div class="column-header-expanded-tools hidden items-center gap-2 shrink-0">
+                                <div class="flex items-center gap-1 bg-white border border-beige rounded-sm p-0.5 shadow-2xs">
+                                    <button type="button" onclick="event.stopPropagation(); expandirColunaVizinha(-1)" class="p-1 hover:bg-beige rounded-xs text-gray-600 hover:text-dark transition-colors" title="Coluna Anterior (&larr;)">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                                    </button>
+                                    <span class="text-[11px] font-serif px-1 text-gray-500 font-medium">Navegar</span>
+                                    <button type="button" onclick="event.stopPropagation(); expandirColunaVizinha(1)" class="p-1 hover:bg-beige rounded-xs text-gray-600 hover:text-dark transition-colors" title="Próxima Coluna (&rarr;)">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                    </button>
+                                </div>
+                                <button type="button" onclick="event.stopPropagation(); recolherColunaExpandida()" class="px-2.5 py-1 bg-dark hover:bg-opacity-90 text-white rounded-sm text-xs font-serif font-semibold transition-all shadow-xs flex items-center gap-1" title="Recolher para modo normal (Esc)">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                    <span>Recolher (Esc)</span>
+                                </button>
+                            </div>
+                        </header>
+
+                        <!-- Barra Vertical para quando a coluna estiver recolhida -->
+                        <div onclick="expandirColuna('done')" class="column-collapsed-strip hidden flex-1 flex flex-col items-center justify-between py-4 px-1 bg-offwhite hover:bg-beige/60 cursor-pointer transition-colors" title="Clique para expandir Done">
+                            <div class="flex flex-col items-center gap-2">
+                                <span class="w-2.5 h-2.5 rounded-full bg-musgo"></span>
+                                <span id="count-done-collapsed" class="text-xs font-mono font-bold bg-musgo/20 text-musgo px-1.5 py-0.5 rounded-sm shadow-2xs">0</span>
+                            </div>
+                            <div class="py-4 font-serif font-bold text-xs tracking-wider uppercase text-musgo select-none writing-vertical truncate max-h-[260px]">
+                                Done
+                            </div>
+                            <div class="text-gray-400 hover:text-dark p-1">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+                            </div>
+                        </div>
+
+                        <div class="p-2 flex-1 overflow-y-auto flex flex-col gap-2.5 kanban-column custom-scrollbar" id="col-done"></div>
+                    </section>
+
+                </div>
+            </main>
+        </div>
+
+        <!-- ================= ABA 2: GERENCIAR SPRINTS ================= -->
+        <div id="view-sprints" class="aba-content hidden-tab p-6 lg:p-10 overflow-y-auto custom-scrollbar">
+            <div class="max-w-4xl mx-auto">
+                <div class="mb-8">
+                    <h2 class="font-serif text-3xl lg:text-4xl font-bold text-dark mb-2">Planejamento de Sprints</h2>
+                    <p class="font-serif text-lg text-gray-600">
+                        Cadencie seu trabalho autônomo com ciclos de 1 a 2 semanas. Defina um objetivo claro para cada ciclo e mantenha o ritmo.
+                    </p>
+                </div>
+
+                <!-- Formulário para Criar Nova Sprint -->
+                <div class="bg-white p-6 border border-beige rounded-sm shadow-xs mb-8">
+                    <h3 class="font-serif text-xl font-bold text-dark mb-4 pb-2 border-b border-beige">Planejar Nova Sprint</h3>
+                    <form onsubmit="salvarNovaSprintForm(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Nome da Sprint</label>
+                            <input type="text" id="sprintNome" required class="w-full p-2.5 border border-beige rounded-sm font-serif text-lg focus:outline-none focus:border-terracota" placeholder="Ex: Sprint 1 - Lançamento da Página de Vendas">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Objetivos & Metas (Sprint Goal)</label>
+                            <textarea id="sprintDescricao" rows="3" class="w-full p-2.5 border border-beige rounded-sm font-serif text-sm focus:outline-none focus:border-terracota" placeholder="Descreva os objetivos principais, critérios de sucesso ou notas desta sprint..."></textarea>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Data de Início</label>
+                                <input type="date" id="sprintInicio" required onclick="if(this.showPicker) this.showPicker()" class="w-full p-2 border border-beige rounded-sm text-sm focus:outline-none focus:border-terracota cursor-pointer">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Data de Término</label>
+                                <input type="date" id="sprintFim" required onclick="if(this.showPicker) this.showPicker()" class="w-full p-2 border border-beige rounded-sm text-sm focus:outline-none focus:border-terracota cursor-pointer">
+                            </div>
+                        </div>
+                        <div class="flex justify-end pt-2">
+                            <button type="submit" class="bg-dark hover:bg-opacity-90 text-white font-serif px-6 py-2 rounded-sm text-base transition-all shadow-xs">
+                                Salvar Sprint no Planejamento
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Lista de Sprints Renderizada Dinamicamente -->
+                <div id="sprints-lista-conteudo"></div>
+            </div>
+        </div>
+
+        <!-- ================= ABA 3: HISTÓRICO ================= -->
+        <div id="view-historico" class="aba-content hidden-tab p-6 lg:p-10 overflow-y-auto custom-scrollbar">
+            <div class="max-w-4xl mx-auto">
+                <div class="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                        <h2 class="font-serif text-3xl lg:text-4xl font-bold text-dark mb-2">Histórico de Conclusões & Fluxo</h2>
+                        <p class="font-serif text-lg text-gray-600">
+                            O diário de bordo das suas entregas solo e análise das métricas ágeis de fluxo contínuo.
+                        </p>
+                    </div>
+                    <button type="button" onclick="abrirModalInfoMetricas('geral')" class="self-start sm:self-center px-3.5 py-2 text-xs font-sans font-medium border border-beige hover:border-dark/30 bg-white hover:bg-beige text-dark rounded-sm flex items-center gap-2 transition-all shadow-2xs cursor-pointer group shrink-0" title="Ver guia explicativo de como interpretar e otimizar as métricas de fluxo">
+                        <svg class="w-4 h-4 text-musgo group-hover:text-dark transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <span>Entenda as Métricas</span>
+                    </button>
+                </div>
+
+                <!-- Ação 2.1: Painel de Métricas de Fluxo Scrumban (Lead Time, Cycle Time & Throughput + Dificuldade) -->
+                <div id="painel-metricas-fluxo" class="space-y-6 mb-8"></div>
+
+                <div id="historico-lista-conteudo" class="space-y-6"></div>
+            </div>
+        </div>
+
+        <!-- ================= ABA 4: CONFIGURAÇÕES & BACKUP ================= -->
+        <div id="view-config" class="aba-content hidden-tab p-6 lg:p-10 overflow-y-auto custom-scrollbar">
+            <div class="max-w-3xl mx-auto space-y-8">
+                <div>
+                    <h2 class="font-serif text-3xl lg:text-4xl font-bold text-dark mb-2">Configurações & Backup</h2>
+                    <p class="font-serif text-lg text-gray-600">
+                        Ajuste as regras de fluxo de trabalho e garanta a integridade dos seus dados locais.
+                    </p>
+                </div>
+
+                <!-- Limite WIP -->
+                <div class="bg-white p-6 border border-beige rounded-sm shadow-xs">
+                    <h3 class="font-serif text-xl font-bold text-dark mb-2">Limite WIP (Trabalho em Progresso)</h3>
+                    <p class="font-serif text-sm text-gray-600 mb-4">
+                        Para quem trabalha por conta e sozinho, a alternância constante de contexto destrói a produtividade. Defina quantas tarefas no máximo você pode ter na coluna "In Progress".
+                    </p>
+                    <div class="flex items-center gap-3">
+                        <input type="number" id="configWipLimit" min="1" max="10" class="w-24 p-2 bg-white text-dark border border-beige rounded-sm font-mono text-center text-lg focus:outline-none focus:border-terracota shadow-2xs">
+                        <button onclick="salvarConfigWip()" class="bg-dark text-white font-serif px-4 py-2 rounded-sm text-sm">Salvar Limite</button>
+                    </div>
+                </div>
+
+                <!-- Ação 2.2: Ponto de Reabastecimento (Replenishment Trigger) -->
+                <div class="bg-white p-6 border border-beige rounded-sm shadow-xs">
+                    <h3 class="font-serif text-xl font-bold text-dark mb-2">Ponto de Reabastecimento (Replenishment Trigger)</h3>
+                    <p class="font-serif text-sm text-gray-600 mb-4">
+                        Para manter o fluxo contínuo e sem interrupções, quando a quantidade de tarefas em "TODO" for menor ou igual a este limite, a coluna alertará que é hora de puxar mais itens do Backlog.
+                    </p>
+                    <div class="flex items-center gap-3">
+                        <input type="number" id="configReplenishmentLimit" min="1" max="10" class="w-24 p-2 bg-white text-dark border border-beige rounded-sm font-mono text-center text-lg focus:outline-none focus:border-terracota shadow-2xs">
+                        <button onclick="salvarConfigReplenishment()" class="bg-dark text-white font-serif px-4 py-2 rounded-sm text-sm">Salvar Ponto</button>
+                    </div>
+                </div>
+
+                <!-- Configuração de Visualização de Sub-tarefas (Hierarquia) -->
+                <div class="bg-white p-6 border border-beige rounded-sm shadow-xs">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="font-serif text-xl font-bold text-dark">Visualização de Sub-tarefas no Quadro</h3>
+                        <span id="badge-subtasks-visibilidade" class="text-xs font-mono px-2 py-0.5 rounded-sm bg-beige text-gray-700">Todas Visíveis</span>
+                    </div>
+                    <p class="font-serif text-sm text-gray-600 mb-4">
+                        Defina como as tarefas filhas devem ser exibidas nas colunas do quadro Kanban.
+                    </p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <label class="flex items-start gap-3 p-3 rounded-sm border border-beige bg-offwhite hover:bg-beige/40 cursor-pointer transition-colors">
+                            <input type="radio" name="opcaoVisibilidadeSubtasks" value="all" onchange="salvarConfigSubtasksVisibilidade('all')" class="text-terracota focus:ring-terracota mt-0.5">
+                            <div>
+                                <span class="font-serif text-sm font-semibold text-dark block">Todas as Tarefas no Quadro (Opção 1)</span>
+                                <span class="text-[11px] text-gray-500 font-sans block">Tarefas principais e filhas aparecem nas colunas. Cada sub-tarefa é um card independente com sua própria coluna e progresso.</span>
+                            </div>
+                        </label>
+                        <label class="flex items-start gap-3 p-3 rounded-sm border border-beige bg-offwhite hover:bg-beige/40 cursor-pointer transition-colors">
+                            <input type="radio" name="opcaoVisibilidadeSubtasks" value="parent_only" onchange="salvarConfigSubtasksVisibilidade('parent_only')" class="text-terracota focus:ring-terracota mt-0.5">
+                            <div>
+                                <span class="font-serif text-sm font-semibold text-dark block">Apenas Tarefas Pai (Opção 2)</span>
+                                <span class="text-[11px] text-gray-500 font-sans block">As colunas exibem apenas os cards principais. As sub-tarefas ficam concentradas e gerenciadas dentro do modal de detalhes do pai.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Gestão de Projetos / Categorias -->
+                <div class="bg-white p-6 border border-beige rounded-sm shadow-xs">
+                    <h3 class="font-serif text-xl font-bold text-dark mb-2">Projetos & Categorias</h3>
+                    <p class="font-serif text-sm text-gray-600 mb-4">
+                        Etiquetas para categorizar suas tarefas por cliente, produto ou atividade interna.
+                    </p>
+                    <div class="flex gap-2 mb-4">
+                        <input type="text" id="configNovoProjeto" placeholder="Nome do novo projeto..." class="flex-1 p-2 bg-white text-dark border border-beige rounded-sm text-sm focus:outline-none focus:border-terracota shadow-2xs">
+                        <button onclick="adicionarProjetoConfig()" class="bg-musgo text-white font-serif px-4 py-2 rounded-sm text-sm">+ Adicionar</button>
+                    </div>
+                    <ul id="configListaProjetos" class="space-y-2"></ul>
+                </div>
+
+                <!-- Aparência & Tema (Modo Escuro / Modo Claro) -->
+                <div class="bg-white p-6 border border-beige rounded-sm shadow-xs">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="font-serif text-xl font-bold text-dark">Aparência & Tema</h3>
+                        <span id="badge-tema-atual" class="text-xs font-mono px-2 py-0.5 rounded-sm bg-beige text-gray-700">Tema Claro</span>
+                    </div>
+                    <p class="font-serif text-sm text-gray-600 mb-4">
+                        Alterne entre o tema clássico linho/terracota e o modo escuro grafite aquecido, otimizado para foco prolongado e menor fadiga visual em trabalho noturno.
+                    </p>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <label class="flex items-center gap-3 p-3 rounded-sm border border-beige bg-offwhite hover:bg-beige/40 cursor-pointer transition-colors">
+                            <input type="radio" name="opcaoTemaConfig" value="light" onchange="definirTema('light')" class="text-terracota focus:ring-terracota">
+                            <div>
+                                <span class="font-serif text-sm font-semibold text-dark block">Modo Claro</span>
+                                <span class="text-[11px] text-gray-500 font-sans block">Linho suave e terracota</span>
+                            </div>
+                        </label>
+                        <label class="flex items-center gap-3 p-3 rounded-sm border border-beige bg-offwhite hover:bg-beige/40 cursor-pointer transition-colors">
+                            <input type="radio" name="opcaoTemaConfig" value="dark" onchange="definirTema('dark')" class="text-terracota focus:ring-terracota">
+                            <div>
+                                <span class="font-serif text-sm font-semibold text-dark block">Modo Escuro</span>
+                                <span class="text-[11px] text-gray-500 font-sans block">Grafite aquecido e carvão</span>
+                            </div>
+                        </label>
+                        <label class="flex items-center gap-3 p-3 rounded-sm border border-beige bg-offwhite hover:bg-beige/40 cursor-pointer transition-colors">
+                            <input type="radio" name="opcaoTemaConfig" value="system" onchange="definirTema('system')" class="text-terracota focus:ring-terracota">
+                            <div>
+                                <span class="font-serif text-sm font-semibold text-dark block">Sistema</span>
+                                <span class="text-[11px] text-gray-500 font-sans block">Detectar SO automaticamente</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Backup de Dados -->
+                <div class="bg-white p-6 border border-beige rounded-sm shadow-xs">
+                    <h3 class="font-serif text-xl font-bold text-dark mb-2">Backup & Exportação</h3>
+                    <p class="font-serif text-sm text-gray-600 mb-4">
+                        Todos os seus dados ficam salvos de forma segura e privada diretamente no seu navegador. Você pode baixar uma cópia em JSON ou restaurar um backup a qualquer momento.
+                    </p>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <button onclick="exportarBackupJSON()" class="bg-dark hover:bg-opacity-90 text-white font-serif px-4 py-2 rounded-sm text-sm flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                            Exportar Backup (JSON)
+                        </button>
+                        
+                        <label class="border border-beige bg-offwhite hover:bg-beige text-dark font-serif px-4 py-2 rounded-sm text-sm cursor-pointer flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                            Importar Backup (JSON)
+                            <input type="file" accept=".json" onchange="importarBackupJSON(event)" class="hidden">
+                        </label>
+
+                        <button type="button" onclick="abrirModalLimparDados()" class="text-xs text-terracota hover:text-white hover:bg-terracota underline ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-terracota/30 transition-all font-serif">
+                            <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            Limpar / Resetar dados...
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ================= MODAL DE DETALHES DA TAREFA (VISUALIZAÇÃO) ================= -->
+    <dialog id="modalDetalhesTarefa" class="p-0 border-0 rounded-sm shadow-2xl bg-white w-[92%] max-w-lg">
+        <div class="p-6 flex flex-col max-h-[85vh]">
+            <!-- Topo / Metadados e Ações -->
+            <div class="flex items-center justify-between pb-3 border-b border-beige gap-2 shrink-0">
+                <div class="flex flex-wrap items-center gap-1.5 min-w-0">
+                    <span id="detalhe-dificuldade" class="text-[12px] font-bold tracking-wider px-2.5 py-0.5 rounded-full flex items-center gap-1.5"></span>
+                    <span id="detalhe-prioridade" class="text-[12px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full"></span>
+                    <span id="detalhe-projeto" class="text-[13px] font-medium text-gray-700 bg-beige/80 px-2.5 py-0.5 rounded-sm truncate max-w-[150px]"></span>
+                    <span id="detalhe-coluna" class="text-[13px] font-medium text-gray-600 border border-beige px-2.5 py-0.5 rounded-sm"></span>
+                </div>
+                
+                <div class="flex items-center gap-2 shrink-0">
+                    <!-- Botão Clicável de Editar -->
+                    <button type="button" id="btn-detalhes-editar" onclick="editarTarefaDeDetalhes()" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-beige hover:bg-dark hover:text-white text-dark text-sm font-serif font-semibold rounded-sm transition-all border border-beige shadow-xs" title="Editar informações desta tarefa">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                        <span>Editar</span>
+                    </button>
+
+                    <!-- Fechar -->
+                    <button type="button" onclick="fecharModalDetalhes()" class="text-gray-400 hover:text-dark p-1" title="Fechar visualização">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Conteúdo Rolável dos Detalhes -->
+            <div class="space-y-4 overflow-y-auto py-3 pr-1 custom-scrollbar flex-1">
+                <!-- Alerta de Overdue / Prazo se aplicável -->
+                <div id="detalhe-alerta-prazo" class="hidden rounded-sm p-3 text-sm flex items-center gap-2.5"></div>
+
+                <!-- Banner de Tarefa Pai (se for sub-tarefa) -->
+                <div id="detalhe-parent-banner" class="hidden rounded-sm p-2.5 bg-amber-50/90 border border-amber-300/80 text-dark text-sm font-serif flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-1.5 min-w-0">
+                        <svg class="w-4 h-4 text-amber-700 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a4 4 0 014 4v4m0 0l-3-3m3 3l3-3"></path></svg>
+                        <span class="text-gray-600 shrink-0">Subtarefa de:</span>
+                        <strong id="detalhe-parent-title" class="font-bold text-dark truncate cursor-pointer hover:underline"></strong>
+                    </div>
+                    <button type="button" id="detalhe-parent-btn" class="text-[13px] font-semibold text-amber-900 hover:text-dark underline shrink-0">
+                        Abrir Tarefa Pai &rarr;
+                    </button>
+                </div>
+
+                <!-- Título da Tarefa -->
+                <div>
+                    <h2 id="detalhe-titulo" class="font-serif text-2xl font-bold text-dark leading-snug"></h2>
+                </div>
+
+                <!-- Descrição / Notas -->
+                <div>
+                    <h4 class="text-[13px] font-bold uppercase tracking-wider text-gray-500 mb-1">Notas & Detalhes</h4>
+                    <div id="detalhe-descricao" class="text-sm text-gray-700 font-sans leading-relaxed whitespace-pre-wrap bg-offwhite/80 p-3 rounded-sm border border-beige/60 min-h-[60px]"></div>
+                </div>
+
+                <!-- Informações de Prazo e Datas -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                    <div class="p-2.5 bg-offwhite border border-beige/60 rounded-sm">
+                        <span class="text-xs font-bold uppercase tracking-wider text-gray-400 block mb-0.5">Prazo / Due Date</span>
+                        <div id="detalhe-duedate-info" class="text-sm font-medium text-gray-800 flex items-center gap-1.5"></div>
+                    </div>
+                    <div class="p-2.5 bg-offwhite border border-beige/60 rounded-sm">
+                        <span class="text-xs font-bold uppercase tracking-wider text-gray-400 block mb-0.5">Criada em</span>
+                        <div id="detalhe-criacao-info" class="text-sm text-gray-600"></div>
+                    </div>
+                </div>
+
+                <!-- Sub-tarefas / Árvore de Cards Filhos -->
+                <div class="pt-2 border-t border-beige/60">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-1.5">
+                            <svg class="w-4 h-4 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M8 14h12M8 18h12"></path></svg>
+                            <h4 class="text-[13px] font-bold uppercase tracking-wider text-gray-500">Sub-tarefas (<span id="detalhe-filhas-count">0/0</span>)</h4>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <button type="button" onclick="abrirVincularSubtarefaExistente()" class="text-[13px] font-serif text-gray-600 hover:text-dark px-2.5 py-0.5 rounded-sm border border-beige bg-offwhite hover:bg-beige transition-colors" title="Vincular um card existente como sub-tarefa">
+                                Vincular
+                            </button>
+                            <button type="button" onclick="criarNovaSubtarefaDireta()" class="text-[13px] font-serif text-dark font-semibold px-2.5 py-0.5 rounded-sm border border-beige bg-beige hover:bg-dark hover:text-white transition-colors" title="Criar nova sub-tarefa completa">
+                                + Nova Sub-tarefa
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Seletor Rápido para Vincular Tarefa Existente -->
+                    <div id="detalhe-vincular-container" class="hidden mb-2 p-2 bg-offwhite border border-beige rounded-sm flex items-center gap-2">
+                        <select id="detalhe-select-vincular" class="flex-1 text-sm border border-beige p-1.5 rounded-sm bg-white text-dark focus:outline-none focus:border-terracota"></select>
+                        <button type="button" onclick="confirmarVincularSubtarefaExistente()" class="bg-dark text-white px-3 py-1 rounded-sm text-sm font-serif hover:bg-opacity-90">Vincular</button>
+                        <button type="button" onclick="fecharVincularSubtarefaExistente()" class="text-gray-500 hover:text-dark text-sm font-serif px-2 py-1">Cancelar</button>
+                    </div>
+
+                    <ul id="detalhe-filhas-lista" class="space-y-1.5"></ul>
+                </div>
+
+                <!-- Imagens & Anexos (Item 4: IndexedDB) -->
+                <div class="pt-2 border-t border-beige/60">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <div class="flex items-center gap-1.5">
+                            <svg class="w-4 h-4 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                            <h4 class="text-[13px] font-bold uppercase tracking-wider text-gray-500">Imagens / Anexos (<span id="detalhe-imagens-count">0</span>)</h4>
+                        </div>
+                    </div>
+                    <div id="detalhe-imagens-lista" class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mt-2"></div>
+                </div>
+
+                <!-- Checklist / Subtarefas Simples com Toggle Rápido -->
+                <div class="pt-2 border-t border-beige/60">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <h4 class="text-[13px] font-bold uppercase tracking-wider text-gray-500">Checklist Simples (<span id="detalhe-subtasks-count">0/0</span>)</h4>
+                        <span class="text-xs text-gray-400 italic font-serif">Clique para marcar/desmarcar</span>
+                    </div>
+                    <ul id="detalhe-subtasks-lista" class="space-y-1.5"></ul>
+                </div>
+            </div>
+
+            <!-- Rodapé com Exclusão e Fechar -->
+            <div class="pt-3 border-t border-beige flex items-center justify-between shrink-0">
+                <button type="button" onclick="excluirTarefaDeDetalhes()" class="text-sm font-serif text-terracota hover:underline">
+                    Excluir Tarefa
+                </button>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="fecharModalDetalhes()" class="bg-dark text-white font-serif px-5 py-1.5 rounded-sm text-sm hover:bg-opacity-90">Fechar</button>
+                </div>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- ================= MODAL DE TAREFA (CRIAR / EDITAR) ================= -->
+    <dialog id="modalTarefa" class="p-0 border-0 rounded-sm shadow-2xl bg-white w-[92%] max-w-lg">
+        <div class="p-6">
+            <div class="flex items-center justify-between pb-3 border-b border-beige mb-4">
+                <h3 class="font-serif text-2xl font-bold text-dark" id="modal-tarefa-titulo">Nova Ideia / Tarefa</h3>
+                <button onclick="fecharModalTarefa()" class="text-gray-400 hover:text-dark">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <div class="space-y-4 max-h-[70vh] overflow-y-auto pr-1 custom-scrollbar">
+                <!-- Título -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Título / O que precisa ser feito? *</label>
+                    <textarea id="inputTitulo" rows="2" class="w-full p-2.5 bg-white text-dark border border-beige rounded-sm focus:outline-none focus:border-terracota font-serif text-lg resize-none leading-snug" placeholder="Ex: Desenhar modelo de banco de dados..."></textarea>
+                </div>
+
+                <!-- Detalhes / Descrição -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Notas / Detalhes (Opcional)</label>
+                    <textarea id="inputDescricao" rows="2" class="w-full p-2 bg-white text-dark border border-beige rounded-sm focus:outline-none focus:border-terracota text-sm leading-relaxed" placeholder="Contexto adicional, links, observações de implementação..."></textarea>
+                </div>
+
+                <!-- Projeto, Prioridade e Dificuldade (Item 1) -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Projeto / Tag</label>
+                        <select id="inputProjeto" class="w-full p-2 border border-beige rounded-sm focus:outline-none focus:border-terracota bg-white text-dark text-sm"></select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Prioridade</label>
+                        <select id="inputPrioridade" class="w-full p-2 border border-beige rounded-sm focus:outline-none focus:border-terracota bg-white text-dark text-sm">
+                            <option value="baixa">Baixa Prioridade</option>
+                            <option value="media" selected>Média Prioridade</option>
+                            <option value="alta">Alta Prioridade</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Dificuldade</label>
+                        <select id="inputDificuldade" class="w-full p-2 border border-beige rounded-sm focus:outline-none focus:border-terracota bg-white text-dark text-sm">
+                            <option value="trivial">🟢 Trivial</option>
+                            <option value="facil">🟢 Fácil</option>
+                            <option value="media" selected>🟡 Média</option>
+                            <option value="dificil">🔴 Difícil</option>
+                            <option value="muito_dificil">🔴 Muito Difícil</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Coluna Inicial e Data Limite -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Estágio / Coluna</label>
+                        <select id="inputColuna" class="w-full p-2 border border-beige rounded-sm focus:outline-none focus:border-terracota bg-white text-dark text-sm">
+                            <option value="backlog">Backlog</option>
+                            <option value="todo">TODO</option>
+                            <option value="progress">In Progress</option>
+                            <option value="testing">Testing</option>
+                            <option value="done">Done</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Data Limite (Due Date)</label>
+                        <input type="date" id="inputDueDate" onclick="if(this.showPicker) this.showPicker()" class="w-full p-2 bg-white text-dark border border-beige rounded-sm text-sm focus:outline-none focus:border-terracota cursor-pointer">
+                    </div>
+                </div>
+
+                <!-- Hierarquia: Pertence à Tarefa Pai (Opcional) -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Pertence à Tarefa Pai (Opcional)</label>
+                    <select id="inputParentId" class="w-full p-2 border border-beige rounded-sm focus:outline-none focus:border-terracota bg-white text-dark text-sm">
+                        <option value="">(Nenhuma - Tarefa Principal)</option>
+                    </select>
+                </div>
+
+                <!-- Subtarefas / Checklist -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Checklist de Subtarefas</label>
+                    <div class="flex gap-2 mb-2">
+                        <input type="text" id="inputNovaSubtask" placeholder="Adicionar passo ou subtarefa..." onkeydown="if(event.key==='Enter'){event.preventDefault(); adicionarSubtask();}" class="flex-1 p-1.5 bg-white text-dark border border-beige rounded-sm text-sm focus:outline-none focus:border-terracota">
+                        <button type="button" onclick="adicionarSubtask()" class="bg-beige hover:bg-dark hover:text-white px-3 py-1.5 rounded-sm text-xs font-serif transition-colors">Adicionar</button>
+                    </div>
+                    <ul id="lista-subtasks" class="space-y-1.5"></ul>
+                </div>
+
+                <!-- Imagens da Tarefa & Relação com Subtarefas (Item 4: IndexedDB) -->
+                <div class="pt-2 border-t border-beige/60">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="block text-xs font-bold uppercase tracking-wider text-gray-700">Imagens / Anexos (Armazenadas no IndexedDB)</label>
+                        <label for="inputUploadImagem" class="cursor-pointer inline-flex items-center gap-1.5 px-2.5 py-1 bg-beige hover:bg-dark hover:text-white text-dark text-xs font-serif font-semibold rounded-sm transition-colors border border-beige shadow-2xs">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                            <span>Adicionar Imagem</span>
+                        </label>
+                        <input type="file" id="inputUploadImagem" accept="image/*" class="hidden" onchange="processarUploadImagemTarefa(event)">
+                    </div>
+                    <p class="text-[11px] text-gray-500 font-sans mb-2">Você pode anexar prints ou fotos e associá-las a uma subtarefa ou tarefa filha específica.</p>
+                    <div id="lista-imagens-tarefa" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
+                </div>
+            </div>
+
+            <!-- Rodapé do Modal -->
+            <div class="mt-6 pt-4 border-t border-beige flex items-center justify-between">
+                <button type="button" id="btn-excluir-tarefa" onclick="excluirTarefaAtual()" class="text-xs font-serif text-terracota hover:underline hidden">
+                    Excluir Tarefa
+                </button>
+                <div class="flex items-center gap-2 ml-auto">
+                    <button type="button" onclick="fecharModalTarefa()" class="px-4 py-2 font-serif text-gray-600 hover:text-dark text-sm">Cancelar</button>
+                    <button type="button" onclick="salvarTarefaForm()" class="bg-dark hover:bg-opacity-90 text-white px-5 py-2 rounded-sm font-serif text-sm shadow-xs">Salvar</button>
+                </div>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- ================= MODAL CONCLUIR SPRINT ================= -->
+    <dialog id="modalConcluirSprint" class="p-0 border-0 rounded-sm shadow-2xl bg-white w-[90%] max-w-md">
+        <div class="p-6">
+            <div class="flex items-center gap-2 text-musgo mb-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span class="text-xs font-bold uppercase tracking-wider">Fechamento de Ciclo</span>
+            </div>
+            <h3 class="font-serif text-2xl font-bold text-dark mb-1">Concluir Sprint?</h3>
+            <p class="font-serif text-base text-gray-600 mb-4" id="concluir-sprint-nome"></p>
+
+            <div class="bg-offwhite p-4 border border-beige rounded-sm mb-4 space-y-1 text-sm font-serif">
+                <p class="text-musgo font-semibold" id="concluir-sprint-done-count"></p>
+                <p class="text-gray-500" id="concluir-sprint-pending-count"></p>
+            </div>
+
+            <div class="space-y-2 mb-4">
+                <label class="block text-xs font-bold uppercase tracking-wider text-gray-700">O que fazer com as tarefas pendentes?</label>
+                <div class="space-y-2">
+                    <label class="flex items-start gap-3 p-2.5 rounded-sm border border-beige bg-offwhite hover:bg-beige/40 cursor-pointer transition-colors">
+                        <input type="radio" name="acaoPendentes" value="manter" checked class="text-terracota focus:ring-terracota mt-0.5 shrink-0">
+                        <div>
+                            <span class="font-serif text-sm font-semibold text-dark block">Manter nas colunas atuais</span>
+                            <span class="text-[11px] text-gray-500 font-sans block">Continua o progresso atual das tarefas para a próxima sprint.</span>
+                        </div>
+                    </label>
+                    <label class="flex items-start gap-3 p-2.5 rounded-sm border border-beige bg-offwhite hover:bg-beige/40 cursor-pointer transition-colors">
+                        <input type="radio" name="acaoPendentes" value="backlog" class="text-terracota focus:ring-terracota mt-0.5 shrink-0">
+                        <div>
+                            <span class="font-serif text-sm font-semibold text-dark block">Mover de volta para o Backlog</span>
+                            <span class="text-[11px] text-gray-500 font-sans block">Reprioriza todas as tarefas pendentes de volta na entrada.</span>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <div class="space-y-1.5 mb-6">
+                <label for="concluir-sprint-notes" class="block text-xs font-bold uppercase tracking-wider text-gray-700">Notas / Observações da Sprint (Opcional)</label>
+                <textarea id="concluir-sprint-notes" rows="3" class="w-full p-2.5 bg-offwhite border border-beige rounded-sm font-serif text-sm text-dark focus:outline-hidden focus:border-musgo resize-y" placeholder="Anotações finais, retrospectiva rápida, aprendizados ou observações do ciclo..."></textarea>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 pt-3 border-t border-beige">
+                <button onclick="fecharModalConcluirSprint()" class="px-4 py-2 font-serif text-gray-600 text-sm">Cancelar</button>
+                <button onclick="confirmarFechamentoSprint()" class="bg-musgo hover:bg-opacity-90 text-white font-serif px-5 py-2 rounded-sm text-sm shadow-xs">
+                    Confirmar & Arquivar
+                </button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- ================= MODAL EDITAR NOTAS DA SPRINT ================= -->
+    <dialog id="modalEditarNotasSprint" class="p-0 border-0 rounded-sm shadow-2xl bg-white w-[90%] max-w-md">
+        <div class="p-6">
+            <div class="flex items-center justify-between pb-3 border-b border-beige mb-4">
+                <div class="flex items-center gap-2">
+                    <svg class="w-5 h-5 text-musgo" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                    <h3 class="font-serif text-2xl font-bold text-dark">Editar Notas da Sprint</h3>
+                </div>
+                <button type="button" onclick="fecharModalEditarNotasSprint()" class="text-gray-400 hover:text-dark text-xl font-sans leading-none">&times;</button>
+            </div>
+            <p class="font-serif text-sm text-gray-600 mb-4" id="editar-notas-sprint-nome"></p>
+            <input type="hidden" id="editar-notas-sprint-id" value="">
+            <div class="space-y-1.5 mb-6">
+                <label for="editar-notas-sprint-texto" class="block text-xs font-bold uppercase tracking-wider text-gray-700">Notas / Observações</label>
+                <textarea id="editar-notas-sprint-texto" rows="4" class="w-full p-2.5 bg-offwhite border border-beige rounded-sm font-serif text-sm text-dark focus:outline-hidden focus:border-musgo resize-y" placeholder="Anotações finais, retrospectiva rápida, aprendizados ou observações do ciclo..."></textarea>
+            </div>
+            <div class="flex items-center justify-end gap-2 pt-3 border-t border-beige">
+                <button type="button" onclick="fecharModalEditarNotasSprint()" class="px-4 py-2 font-serif text-gray-600 text-sm">Cancelar</button>
+                <button type="button" onclick="salvarNotasSprintHistorico()" class="bg-musgo hover:bg-opacity-90 text-white font-serif px-5 py-2 rounded-sm text-sm shadow-xs">Salvar Notas</button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- ================= MODAL EDITAR SPRINT ================= -->
+    <dialog id="modalEditarSprint" class="p-0 border-0 rounded-sm shadow-2xl bg-white w-[90%] max-w-md">
+        <div class="p-6">
+            <div class="flex items-center justify-between pb-3 border-b border-beige mb-4">
+                <div class="flex items-center gap-2">
+                    <svg class="w-5 h-5 text-terracota" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                    <h3 class="font-serif text-2xl font-bold text-dark">Editar Sprint</h3>
+                </div>
+                <button type="button" onclick="fecharModalEditarSprint()" class="text-gray-400 hover:text-dark text-xl font-sans leading-none">&times;</button>
+            </div>
+            <form onsubmit="salvarEdicaoSprintForm(event)" class="space-y-4">
+                <input type="hidden" id="editar-sprint-id" value="">
+                <div>
+                    <label for="editar-sprint-nome" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Nome da Sprint</label>
+                    <input type="text" id="editar-sprint-nome" required class="w-full p-2.5 bg-white border border-beige rounded-sm font-serif text-sm text-dark focus:outline-hidden focus:border-terracota" placeholder="Ex: Sprint 04 - Refatoração">
+                </div>
+                <div>
+                    <label for="editar-sprint-descricao" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Metas & Contexto (Opcional)</label>
+                    <textarea id="editar-sprint-descricao" rows="3" class="w-full p-2.5 bg-white border border-beige rounded-sm font-serif text-sm text-dark focus:outline-hidden focus:border-terracota resize-y" placeholder="Objetivo principal, entregáveis esperados ou foco do ciclo..."></textarea>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label for="editar-sprint-inicio" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Data Início</label>
+                        <input type="date" id="editar-sprint-inicio" required onclick="if(this.showPicker) this.showPicker()" class="w-full p-2.5 bg-white border border-beige rounded-sm font-sans text-sm text-dark focus:outline-hidden focus:border-terracota cursor-pointer">
+                    </div>
+                    <div>
+                        <label for="editar-sprint-fim" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Data Fim</label>
+                        <input type="date" id="editar-sprint-fim" required onclick="if(this.showPicker) this.showPicker()" class="w-full p-2.5 bg-white border border-beige rounded-sm font-sans text-sm text-dark focus:outline-hidden focus:border-terracota cursor-pointer">
+                    </div>
+                </div>
+                <div class="flex items-center justify-end gap-2 pt-3 border-t border-beige mt-6">
+                    <button type="button" onclick="fecharModalEditarSprint()" class="px-4 py-2 font-serif text-gray-600 text-sm">Cancelar</button>
+                    <button type="submit" class="bg-dark hover:bg-opacity-90 text-white font-serif px-5 py-2 rounded-sm text-sm shadow-xs">Salvar Alterações</button>
+                </div>
+            </form>
+        </div>
+    </dialog>
+
+    <!-- ================= MODAL ATALHOS DE TECLADO (SOLO DEV) ================= -->
+    <dialog id="modalAtalhosTeclado" class="p-0 border-0 rounded-sm shadow-2xl bg-white w-[90%] max-w-md">
+        <div class="p-6">
+            <div class="flex items-center justify-between pb-3 border-b border-beige mb-4">
+                <div class="flex items-center gap-2">
+                    <svg class="w-5 h-5 text-terracota" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                    <h3 class="font-serif text-2xl font-bold text-dark">Atalhos de Teclado</h3>
+                </div>
+                <button type="button" onclick="fecharModalAtalhos()" class="text-gray-400 hover:text-dark text-xl font-sans leading-none">&times;</button>
+            </div>
+            <p class="font-serif text-sm text-gray-600 mb-4">
+                Mantenha as mãos no teclado e acelere seu fluxo de trabalho:
+            </p>
+            <div class="space-y-2 mb-6 text-sm font-sans">
+                <div class="flex items-center justify-between p-2 rounded-xs bg-offwhite border border-beige/60">
+                    <span class="text-gray-700 font-serif text-[15px]">Criar nova ideia / tarefa</span>
+                    <kbd class="px-2 py-0.5 font-mono text-xs font-bold bg-white border border-beige rounded shadow-2xs text-dark">N</kbd>
+                </div>
+                <div class="flex items-center justify-between p-2 rounded-xs bg-offwhite border border-beige/60">
+                    <span class="text-gray-700 font-serif text-[15px]">Focar na busca rápida de tarefas</span>
+                    <kbd class="px-2 py-0.5 font-mono text-xs font-bold bg-white border border-beige rounded shadow-2xs text-dark">/</kbd>
+                </div>
+                <div class="flex items-center justify-between p-2 rounded-xs bg-offwhite border border-beige/60">
+                    <span class="text-gray-700 font-serif text-[15px]">Ir para Quadro Principal</span>
+                    <kbd class="px-2 py-0.5 font-mono text-xs font-bold bg-white border border-beige rounded shadow-2xs text-dark">1</kbd>
+                </div>
+                <div class="flex items-center justify-between p-2 rounded-xs bg-offwhite border border-beige/60">
+                    <span class="text-gray-700 font-serif text-[15px]">Ir para Gerenciar Sprints</span>
+                    <kbd class="px-2 py-0.5 font-mono text-xs font-bold bg-white border border-beige rounded shadow-2xs text-dark">2</kbd>
+                </div>
+                <div class="flex items-center justify-between p-2 rounded-xs bg-offwhite border border-beige/60">
+                    <span class="text-gray-700 font-serif text-[15px]">Ir para Histórico & Métricas</span>
+                    <kbd class="px-2 py-0.5 font-mono text-xs font-bold bg-white border border-beige rounded shadow-2xs text-dark">3</kbd>
+                </div>
+                <div class="flex items-center justify-between p-2 rounded-xs bg-offwhite border border-beige/60">
+                    <span class="text-gray-700 font-serif text-[15px]">Ir para Configurações & Backup</span>
+                    <kbd class="px-2 py-0.5 font-mono text-xs font-bold bg-white border border-beige rounded shadow-2xs text-dark">4</kbd>
+                </div>
+                <div class="flex items-center justify-between p-2 rounded-xs bg-offwhite border border-beige/60">
+                    <span class="text-gray-700 font-serif text-[15px]">Expandir / Recolher coluna (5: Backlog ... 9: Done)</span>
+                    <kbd class="px-2 py-0.5 font-mono text-xs font-bold bg-white border border-beige rounded shadow-2xs text-dark">5 - 9</kbd>
+                </div>
+                <div class="flex items-center justify-between p-2 rounded-xs bg-offwhite border border-beige/60">
+                    <span class="text-gray-700 font-serif text-[15px]">Recolher / Expandir menu lateral</span>
+                    <kbd class="px-2 py-0.5 font-mono text-xs font-bold bg-white border border-beige rounded shadow-2xs text-dark">[</kbd>
+                </div>
+                <div class="flex items-center justify-between p-2 rounded-xs bg-offwhite border border-beige/60">
+                    <span class="text-gray-700 font-serif text-[15px]">Alternar modo escuro / claro</span>
+                    <kbd class="px-2 py-0.5 font-mono text-xs font-bold bg-white border border-beige rounded shadow-2xs text-dark">D</kbd>
+                </div>
+                <div class="flex items-center justify-between p-2 rounded-xs bg-offwhite border border-beige/60">
+                    <span class="text-gray-700 font-serif text-[15px]">Fechar modais ou recolher coluna expandida</span>
+                    <kbd class="px-2 py-0.5 font-mono text-xs font-bold bg-white border border-beige rounded shadow-2xs text-dark">Esc</kbd>
+                </div>
+            </div>
+            <div class="flex justify-end pt-3 border-t border-beige">
+                <button type="button" onclick="fecharModalAtalhos()" class="bg-dark text-white font-serif px-5 py-1.5 rounded-sm text-sm">Entendido</button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- ================= MODAL INFORMATIVO DE MÉTRICAS DE FLUXO ================= -->
+    <dialog id="modalInfoMetricas" class="p-0 border-0 rounded-sm shadow-2xl bg-white w-[92%] max-w-2xl">
+        <div class="p-6 max-h-[85vh] overflow-y-auto custom-scrollbar">
+            <!-- Cabeçalho -->
+            <div class="flex items-center justify-between pb-3 border-b border-beige mb-4">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-sm bg-musgo/10 flex items-center justify-center text-musgo shrink-0">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </div>
+                    <div>
+                        <h3 class="font-serif text-2xl font-bold text-dark leading-tight">Métricas Ágeis de Fluxo</h3>
+                        <p class="font-serif text-xs text-gray-500">Guia prático para interpretar e otimizar suas entregas solo</p>
+                    </div>
+                </div>
+                <button type="button" onclick="fecharModalInfoMetricas()" class="text-gray-400 hover:text-dark text-xl font-sans leading-none p-1 cursor-pointer" title="Fechar">&times;</button>
+            </div>
+
+            <!-- Seletor de Abas -->
+            <div class="flex border-b border-beige mb-5 gap-1 overflow-x-auto no-scrollbar">
+                <button type="button" onclick="selecionarAbaMetricaInfo('cycle-time')" id="btn-tab-info-cycle" class="tab-metrica-btn px-3.5 py-2 font-serif text-xs sm:text-sm border-b-2 border-musgo text-musgo font-semibold transition-colors whitespace-nowrap cursor-pointer">
+                    ⏱️ Cycle Time
+                </button>
+                <button type="button" onclick="selecionarAbaMetricaInfo('lead-time')" id="btn-tab-info-lead" class="tab-metrica-btn px-3.5 py-2 font-serif text-xs sm:text-sm border-b-2 border-transparent text-gray-500 font-medium hover:text-dark transition-colors whitespace-nowrap cursor-pointer">
+                    🚀 Lead Time
+                </button>
+                <button type="button" onclick="selecionarAbaMetricaInfo('throughput')" id="btn-tab-info-throughput" class="tab-metrica-btn px-3.5 py-2 font-serif text-xs sm:text-sm border-b-2 border-transparent text-gray-500 font-medium hover:text-dark transition-colors whitespace-nowrap cursor-pointer">
+                    📦 Throughput
+                </button>
+                <button type="button" onclick="selecionarAbaMetricaInfo('dificuldade')" id="btn-tab-info-dificuldade" class="tab-metrica-btn px-3.5 py-2 font-serif text-xs sm:text-sm border-b-2 border-transparent text-gray-500 font-medium hover:text-dark transition-colors whitespace-nowrap cursor-pointer">
+                    🎯 Dificuldade & Estimativas
+                </button>
+                <button type="button" onclick="selecionarAbaMetricaInfo('fluxo')" id="btn-tab-info-fluxo" class="tab-metrica-btn px-3.5 py-2 font-serif text-xs sm:text-sm border-b-2 border-transparent text-gray-500 font-medium hover:text-dark transition-colors whitespace-nowrap cursor-pointer">
+                    📐 Diagrama & Relação
+                </button>
+            </div>
+
+            <!-- Conteúdo: Cycle Time -->
+            <div id="conteudo-info-cycle" class="secao-info-metrica space-y-4">
+                <div class="p-3.5 bg-musgo/10 border border-musgo/30 rounded-sm">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-musgo block mb-1">Métrica de Foco & Velocidade de Execução</span>
+                    <h4 class="font-serif text-lg font-bold text-dark">Cycle Time Médio (Tempo de Ciclo)</h4>
+                    <p class="font-sans text-sm text-gray-700 mt-1 leading-relaxed">
+                        É o tempo decorrido desde o instante em que você começa a trabalhar ativamente na tarefa (quando ela é movida para a coluna <strong>In Progress</strong>) até ela ser concluída com sucesso (movida para <strong>Done</strong>).
+                    </p>
+                </div>
+
+                <div class="bg-offwhite p-3.5 border border-beige rounded-sm">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-gray-500 block mb-1 font-mono">Como é calculado:</span>
+                    <div class="font-mono text-xs text-dark bg-white p-2.5 rounded-sm border border-beige/60">
+                        Cycle Time = Data de Conclusão (Done) − Data de Início do Trabalho (In Progress)
+                    </div>
+                    <p class="text-[11px] text-gray-500 mt-1.5 font-sans">
+                        Calculado em dias corridos com base em todas as tarefas concluídas. Se uma tarefa for finalizada no mesmo dia em que foi iniciada, registrará frações de dia (ex: 0.3 dias).
+                    </p>
+                </div>
+
+                <div>
+                    <h5 class="font-serif text-sm font-bold text-dark mb-1.5">Como interpretar seu resultado:</h5>
+                    <ul class="space-y-2 text-xs font-sans text-gray-700 list-disc list-inside">
+                        <li><strong>Cycle Time Baixo (ex: 0.5 a 2 dias):</strong> Excelente cadência. Você tem alto foco, não deixa tarefas congeladas e finaliza o que começa com rapidez.</li>
+                        <li><strong>Cycle Time Alto ou Crescente:</strong> Sinal de alerta. Indica que tarefas passam muitos dias em desenvolvimento. As causas mais comuns para desenvolvedores solo são: multitarefa (tentar fazer várias coisas ao mesmo tempo), tarefas monolíticas grandes demais ou dependências externas não resolvidas.</li>
+                    </ul>
+                </div>
+
+                <div class="p-3 bg-offwhite border-l-2 border-musgo rounded-r-sm">
+                    <h5 class="font-serif text-xs font-bold text-musgo uppercase tracking-wide mb-1">💡 Dicas Práticas para Melhorar:</h5>
+                    <ul class="space-y-1.5 text-xs font-sans text-gray-700">
+                        <li>• <strong>Reduza o Limite WIP:</strong> Vá na aba <em>Configurações</em> e limite a coluna "In Progress" para 1 ou 2 tarefas. Menos contexto alternado resulta em entregas muito mais velozes.</li>
+                        <li>• <strong>Fatie as tarefas:</strong> Quebre cards que levariam 5 dias em sub-tarefas de 1 dia. Tarefas menores têm menor atrito e chegam mais rápido a Done.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Conteúdo: Lead Time -->
+            <div id="conteudo-info-lead" class="secao-info-metrica hidden space-y-4">
+                <div class="p-3.5 bg-terracota/10 border border-terracota/30 rounded-sm">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-terracota block mb-1">Métrica de Capacidade Total de Resposta</span>
+                    <h4 class="font-serif text-lg font-bold text-dark">Lead Time Médio (Tempo Total de Resposta)</h4>
+                    <p class="font-sans text-sm text-gray-700 mt-1 leading-relaxed">
+                        É o ciclo de vida completo da demanda de ponta a ponta: conta desde o minuto em que a ideia foi anotada no sistema (geralmente no <strong>Backlog</strong>) até a sua entrega final em <strong>Done</strong>.
+                    </p>
+                </div>
+
+                <div class="bg-offwhite p-3.5 border border-beige rounded-sm">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-gray-500 block mb-1 font-mono">Como é calculado:</span>
+                    <div class="font-mono text-xs text-dark bg-white p-2.5 rounded-sm border border-beige/60">
+                        Lead Time = Data de Conclusão (Done) − Data de Criação da Tarefa (Backlog)
+                    </div>
+                    <div class="font-mono text-xs text-terracota mt-2 bg-white p-2 rounded-sm border border-terracota/30">
+                        Lead Time = Tempo de Fila (Backlog + To Do) + Cycle Time (In Progress)
+                    </div>
+                </div>
+
+                <div>
+                    <h5 class="font-serif text-sm font-bold text-dark mb-1.5">Como interpretar seu resultado:</h5>
+                    <ul class="space-y-2 text-xs font-sans text-gray-700 list-disc list-inside">
+                        <li><strong>Diferença entre Lead Time e Cycle Time:</strong> Representa o <em>tempo de fila</em>. Se seu Lead Time for 20 dias, mas o Cycle Time for 1 dia, significa que as tarefas passam 19 dias esperando para serem iniciadas!</li>
+                        <li><strong>Lead Time Controlado:</strong> Mostra agilidade de resposta de ponta a ponta: suas ideias não ficam mofando em filas intermináveis e são entregues enquanto o contexto ainda está fresco.</li>
+                    </ul>
+                </div>
+
+                <div class="p-3 bg-offwhite border-l-2 border-terracota rounded-r-sm">
+                    <h5 class="font-serif text-xs font-bold text-terracota uppercase tracking-wide mb-1">💡 Dicas Práticas para Melhorar:</h5>
+                    <ul class="space-y-1.5 text-xs font-sans text-gray-700">
+                        <li>• <strong>Backlog Enxuto:</strong> Elimine ou arquive periodicamente ideias frias que você não planeja executar nas próximas semanas.</li>
+                        <li>• <strong>Ponto de Reabastecimento:</strong> Configure o gatilho nas Configurações para puxar itens do Backlog apenas quando a coluna To Do esvaziar (sob demanda / Just-in-Time).</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Conteúdo: Throughput -->
+            <div id="conteudo-info-throughput" class="secao-info-metrica hidden space-y-4">
+                <div class="p-3.5 bg-dark/5 border border-beige rounded-sm">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-dark block mb-1">Métrica de Cadência e Capacidade Real</span>
+                    <h4 class="font-serif text-lg font-bold text-dark">Throughput (Vazão de Entregas)</h4>
+                    <p class="font-sans text-sm text-gray-700 mt-1 leading-relaxed">
+                        É a quantidade absoluta de tarefas finalizadas e entregues dentro de uma janela de tempo fixa. No Scrumban Pessoal, medimos a vazão nos últimos <strong>7 dias</strong> (ritmo semanal) e nos últimos <strong>30 dias</strong> (ritmo mensal).
+                    </p>
+                </div>
+
+                <div class="bg-offwhite p-3.5 border border-beige rounded-sm">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-gray-500 block mb-1 font-mono">Como é calculado:</span>
+                    <div class="font-mono text-xs text-dark bg-white p-2.5 rounded-sm border border-beige/60">
+                        Throughput = Total de tarefas entregues em Done nas janelas de 7 dias e 30 dias
+                    </div>
+                </div>
+
+                <div>
+                    <h5 class="font-serif text-sm font-bold text-dark mb-1.5">Por que é mais confiável que Story Points:</h5>
+                    <ul class="space-y-2 text-xs font-sans text-gray-700 list-disc list-inside">
+                        <li><strong>Empírico e Real:</strong> Baseia-se no histórico real de entregas concluídas, eliminando estimativas teóricas e chutes subjetivos.</li>
+                        <li><strong>Previsibilidade para Sprints:</strong> Se sua média recente é de 4 a 5 tarefas por semana, planejar uma sprint com 15 tarefas causará sobrecarga e frustração. Use a vazão real para dosar suas metas semanais.</li>
+                    </ul>
+                </div>
+
+                <div class="p-3 bg-offwhite border-l-2 border-dark rounded-r-sm">
+                    <h5 class="font-serif text-xs font-bold text-dark uppercase tracking-wide mb-1">💡 Dicas Práticas para Manter a Cadência:</h5>
+                    <ul class="space-y-1.5 text-xs font-sans text-gray-700">
+                        <li>• <strong>"Pare de começar e comece a terminar":</strong> Sempre que possível, priorize finalizar itens quase prontos antes de iniciar novas demandas.</li>
+                        <li>• <strong>Homogeneidade:</strong> Quebre demandas grandes em tarefas de escopo consistente (que caibam em 0.5 a 2 dias de trabalho focado).</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Conteúdo: Dificuldade & Estimativas -->
+            <div id="conteudo-info-dificuldade" class="secao-info-metrica hidden space-y-4">
+                <div class="p-3.5 bg-media/15 border border-media/40 rounded-sm">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-dark block mb-1">Calibração & Previsibilidade</span>
+                    <h4 class="font-serif text-lg font-bold text-dark">Métricas por Nível de Dificuldade</h4>
+                    <p class="font-sans text-sm text-gray-700 mt-1 leading-relaxed">
+                        Nem toda tarefa tem o mesmo peso. Ao segmentar suas entregas por complexidade (<strong>Trivial</strong>, <strong>Fácil</strong>, <strong>Média</strong>, <strong>Difícil</strong> e <strong>Muito Difícil</strong>), você descobre o seu tempo médio real de execução (Cycle Time) para cada tipo de esforço.
+                    </p>
+                </div>
+
+                <div class="bg-offwhite p-3.5 border border-beige rounded-sm space-y-2">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-gray-500 block mb-1 font-mono">Como utilizar para estimar novas Sprints:</span>
+                    <ul class="space-y-2 text-xs font-sans text-gray-700 list-disc list-inside">
+                        <li><strong>Evite a média genérica:</strong> Se uma tarefa Trivial leva 0.2 dias e uma Muito Difícil leva 4 dias, usar a média geral de 1.5 dias fará você superestimar as fáceis e subestimar perigosamente as complexas.</li>
+                        <li><strong>Cálculo do Escopo Seguro da Sprint:</strong> Some os Cycle Times médios das tarefas que planeja puxar. Se você trabalha 5 dias na semana, não comprometa tarefas cuja soma de Cycle Time ultrapasse a sua capacidade semanal.</li>
+                        <li><strong>Quebra de Complexidade:</strong> Tarefas marcadas como <em>Muito Difícil</em> costumam carregar alto risco de bloqueio. Sempre que possível, quebre-as em sub-tarefas de nível <em>Fácil</em> ou <em>Média</em> para manter o fluxo contínuo.</li>
+                    </ul>
+                </div>
+
+                <div class="p-3 bg-offwhite border-l-2 border-media rounded-r-sm">
+                    <h5 class="font-serif text-xs font-bold text-dark uppercase tracking-wide mb-1">🎯 Paleta de Cores dos Níveis:</h5>
+                    <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 mt-2 font-sans text-[11px]">
+                        <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-[#86efac] border border-[#4ade80]"></span><span>Trivial</span></div>
+                        <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-[#16a34a] border border-[#15803d]"></span><span>Fácil</span></div>
+                        <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-[#facc15] border border-[#eab308]"></span><span>Média</span></div>
+                        <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-[#ef4444] border border-[#dc2626]"></span><span>Difícil</span></div>
+                        <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-[#991b1b] border border-[#7f1d1d]"></span><span>Muito Difícil</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Conteúdo: Visão Integrada & Diagrama -->
+            <div id="conteudo-info-fluxo" class="secao-info-metrica hidden space-y-4">
+                <div>
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-musgo block mb-1">Visão Sistêmica Scrumban</span>
+                    <h4 class="font-serif text-lg font-bold text-dark">Como as Métricas se Conectam</h4>
+                    <p class="font-sans text-sm text-gray-700 mt-1 leading-relaxed">
+                        No Scrumban para desenvolvedor solo, estas três métricas formam um sistema integrado de produtividade:
+                    </p>
+                </div>
+
+                <!-- Diagrama Visual -->
+                <div class="p-4 bg-offwhite border border-beige rounded-sm space-y-3 font-sans">
+                    <div class="text-[11px] font-bold uppercase tracking-wider text-gray-600 mb-2">Linha do Tempo de uma Tarefa:</div>
+                    
+                    <div class="grid grid-cols-3 gap-2 text-center text-xs">
+                        <div class="p-2 bg-white border border-beige rounded-sm">
+                            <span class="font-serif font-bold block text-gray-700">1. Backlog / To Do</span>
+                            <span class="text-[10px] text-gray-400">Tempo de Espera (Fila)</span>
+                        </div>
+                        <div class="p-2 bg-musgo/15 border border-musgo/40 rounded-sm">
+                            <span class="font-serif font-bold block text-musgo">2. In Progress</span>
+                            <span class="text-[10px] text-gray-600">Execução Ativa (Foco)</span>
+                        </div>
+                        <div class="p-2 bg-dark/10 border border-dark/30 rounded-sm">
+                            <span class="font-serif font-bold block text-dark">3. Done</span>
+                            <span class="text-[10px] text-gray-600">Entrega Concluída</span>
+                        </div>
+                    </div>
+
+                    <!-- Barras de Escopo -->
+                    <div class="space-y-1.5 pt-2">
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-mono text-terracota font-bold w-24 shrink-0">LEAD TIME:</span>
+                            <div class="flex-1 bg-terracota/20 border border-terracota text-terracota text-[10px] font-mono py-0.5 text-center rounded-xs">
+                                Todo o ciclo de vida (Criação até Done)
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-mono text-musgo font-bold w-24 shrink-0">CYCLE TIME:</span>
+                            <div class="w-1/3"></div>
+                            <div class="w-2/3 bg-musgo/20 border border-musgo text-musgo text-[10px] font-mono py-0.5 text-center rounded-xs">
+                                Apenas execução ativa (In Progress até Done)
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-mono text-dark font-bold w-24 shrink-0">THROUGHPUT:</span>
+                            <div class="w-2/3"></div>
+                            <div class="w-1/3 bg-dark/20 border border-dark text-dark text-[10px] font-mono py-0.5 text-center rounded-xs">
+                                Volume de cartões em Done
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- A Lei de Little -->
+                <div class="p-3.5 bg-white border border-beige rounded-sm">
+                    <h5 class="font-serif text-sm font-bold text-dark mb-1">A Lei de Little no Desenvolvimento Solo:</h5>
+                    <div class="p-2 bg-offwhite border border-beige/60 rounded-xs font-mono text-xs text-dark my-2 text-center">
+                        Cycle Time = WIP (Tarefas em Progresso) ÷ Throughput (Vazão)
+                    </div>
+                    <p class="text-xs font-sans text-gray-700 leading-relaxed">
+                        A conclusão matemática é simples e poderosa: para diminuir seu tempo de entrega por tarefa (Cycle Time) sem trabalhar mais horas, <strong>reduza o número de tarefas simultâneas que você mantém em progresso (WIP)</strong>!
+                    </p>
+                </div>
+            </div>
+
+            <!-- Rodapé com Botão Fechar -->
+            <div class="flex items-center justify-between pt-4 mt-6 border-t border-beige">
+                <span class="text-xs text-gray-400 font-serif">Scrumban Solo Dev • Fluxo Contínuo & Foco</span>
+                <button type="button" onclick="fecharModalInfoMetricas()" class="bg-dark text-white font-serif px-5 py-1.5 rounded-sm text-sm hover:bg-opacity-90 transition-all cursor-pointer">
+                    Entendido
+                </button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- ================= MODAL LIMPAR / RESETAR DADOS (ZONA DE PERIGO) ================= -->
+    <dialog id="modalLimparDados" class="p-0 border-0 rounded-sm shadow-2xl bg-white w-[92%] max-w-lg">
+        <div class="p-6">
+            <!-- Cabeçalho -->
+            <div class="flex items-center justify-between pb-3 border-b border-beige mb-4">
+                <div class="flex items-center gap-2 text-terracota">
+                    <svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    <h3 class="font-serif text-2xl font-bold text-dark">Limpar e Resetar Dados</h3>
+                </div>
+                <button type="button" onclick="fecharModalLimparDados()" class="text-gray-400 hover:text-dark text-xl font-sans leading-none" title="Fechar">&times;</button>
+            </div>
+
+            <!-- Alerta Crítico -->
+            <div class="p-3.5 bg-terracota/10 border border-terracota/30 rounded-sm mb-4">
+                <p class="font-serif text-sm font-semibold text-terracota flex items-center gap-1.5 mb-1">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    Atenção: Esta ação é definitiva e irreversível!
+                </p>
+                <p class="font-serif text-xs text-gray-700 leading-relaxed">
+                    Todos os dados salvos localmente neste navegador serão apagados e substituídos pela configuração de fábrica limpa.
+                </p>
+            </div>
+
+            <!-- Resumo do impacto (Contadores em tempo real) -->
+            <div class="bg-offwhite p-3.5 border border-beige rounded-sm mb-4 font-serif text-xs text-gray-700 space-y-1.5">
+                <p class="font-bold text-dark uppercase tracking-wider text-[11px]">O que será apagado agora:</p>
+                <ul class="list-disc list-inside space-y-1 text-gray-600 pl-1">
+                    <li><strong id="limpar-total-tarefas" class="text-dark">0</strong> tarefas e subtarefas</li>
+                    <li><strong id="limpar-total-sprints" class="text-dark">0</strong> ciclos de sprint ativos / planejados</li>
+                    <li><strong id="limpar-total-historico" class="text-dark">0</strong> sprints arquivadas no histórico com métricas</li>
+                    <li>Projetos personalizados e configurações de limites WIP</li>
+                </ul>
+            </div>
+
+            <!-- Passos de Verificação -->
+            <div class="space-y-4 mb-6">
+                <!-- Passo 1: Fazer backup preventivo -->
+                <div class="border border-beige p-3 rounded-sm bg-white">
+                    <div class="flex items-center justify-between gap-3">
+                        <div>
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-musgo block">Passo 1 (Recomendado)</span>
+                            <span class="font-serif text-xs text-gray-700">Baixe um backup em JSON para não perder seu histórico por acidente:</span>
+                        </div>
+                        <button type="button" onclick="exportarBackupJSON()" class="shrink-0 bg-offwhite hover:bg-beige border border-beige text-dark text-xs font-serif px-3 py-1.5 rounded-sm flex items-center gap-1.5 shadow-2xs">
+                            <svg class="w-3.5 h-3.5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                            Baixar Backup
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Passo 2: Confirmação Ativa -->
+                <div class="border border-terracota/30 p-3 rounded-sm bg-offwhite/50 space-y-3">
+                    <span class="text-[11px] font-bold uppercase tracking-wider text-terracota block">Passo 2 (Confirmação Obrigatória)</span>
+                    
+                    <label class="flex items-start gap-2.5 cursor-pointer">
+                        <input type="checkbox" id="checkConfirmarLimpeza" onchange="verificarConfirmacaoLimparDados()" class="mt-0.5 rounded text-terracota focus:ring-terracota">
+                        <span class="font-serif text-xs text-gray-700">
+                            Estou ciente de que não poderei recuperar esses dados sem um arquivo de backup.
+                        </span>
+                    </label>
+
+                    <div>
+                        <label for="inputConfirmarLimpeza" class="block font-serif text-xs text-gray-700 mb-1">
+                            Digite a palavra <strong class="text-terracota font-mono select-all">RESETAR</strong> abaixo para liberar a exclusão:
+                        </label>
+                        <input type="text" id="inputConfirmarLimpeza" oninput="verificarConfirmacaoLimparDados()" placeholder="Digite RESETAR" autocomplete="off" class="w-full p-2 bg-white border border-beige rounded-sm font-mono text-sm text-dark focus:outline-hidden focus:border-terracota">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rodapé / Ações -->
+            <div class="flex items-center justify-end gap-2 pt-3 border-t border-beige">
+                <button type="button" onclick="fecharModalLimparDados()" class="px-4 py-2 font-serif text-gray-600 hover:text-dark text-sm">
+                    Cancelar
+                </button>
+                <button type="button" id="btnConfirmarExclusaoTotal" onclick="executarLimpezaTotalDados()" disabled class="bg-terracota hover:bg-opacity-90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-serif px-5 py-2 rounded-sm text-sm shadow-xs flex items-center gap-2 transition-all">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    <span>Apagar Tudo e Resetar</span>
+                </button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- ================= MODAL VISUALIZAR IMAGEM AMPLIADA ================= -->
+    <dialog id="modalVisualizarImagem" class="p-0 border-0 rounded-sm shadow-2xl bg-white w-[94%] max-w-3xl">
+        <div class="p-4 flex flex-col max-h-[90vh]">
+            <div class="flex items-center justify-between pb-3 border-b border-beige mb-3">
+                <div class="flex items-center gap-2 min-w-0">
+                    <svg class="w-5 h-5 text-musgo shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    <h3 id="modal-imagem-titulo" class="font-serif text-lg font-bold text-dark truncate">Visualizar Imagem</h3>
+                </div>
+                <button type="button" onclick="fecharModalVisualizarImagem()" class="text-gray-400 hover:text-dark text-xl font-sans leading-none p-1 cursor-pointer" title="Fechar">&times;</button>
+            </div>
+            <div class="flex-1 overflow-auto flex items-center justify-center bg-dark/5 p-2 rounded-sm max-h-[70vh]">
+                <img id="modal-imagem-preview" src="" alt="Visualização de anexo" class="max-w-full max-h-[68vh] object-contain rounded-xs shadow-sm">
+            </div>
+            <div class="pt-3 border-t border-beige mt-3 flex items-center justify-between">
+                <span id="modal-imagem-subtarefa-info" class="text-xs font-sans text-gray-500"></span>
+                <button type="button" onclick="fecharModalVisualizarImagem()" class="bg-dark text-white font-serif px-4 py-1.5 rounded-sm text-sm hover:bg-opacity-90">Fechar</button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Container de Notificações Toasts -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm pointer-events-none" aria-live="polite"></div>
+
+    <!-- Script Principal da Aplicação (Compatibilidade universal: duplo clique / file:// e HTTP) -->
+    <script src="js/app.js"></script>
+</body>
+</html>
