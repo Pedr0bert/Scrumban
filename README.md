@@ -1,6 +1,52 @@
-# Scrumban Pessoal v4
+# Scrumban
 
-> Ambiente ágil, offline-first, performático e resiliente baseado no modelo Scrumban voltado para desenvolvimento solo e trabalho autônomo.
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Web%20%7C%20Linux%20Desktop-orange.svg)](#-como-executar)
+[![Offline First](https://img.shields.io/badge/Offline--First-IndexedDB-success.svg)](#-recursos--funcionalidades)
+
+> Ambiente ágil, offline-first, performático e resiliente baseado no modelo Scrumban voltado para desenvolvimento solo e trabalho autônomo. Disponível como **aplicação Web independente** e **aplicativo Desktop nativo** (com baixíssimo consumo de memória via Tauri v2).
+
+---
+
+## 🚀 Como Executar
+
+O Scrumban foi desenvolvido para ser flexível: você pode usá-lo tanto no navegador quanto como aplicativo desktop nativo.
+
+### 🌐 Modo 1: Web (Direto no Navegador, sem instalação)
+
+Não requer compilação de Rust nem Tauri:
+
+* **Execução Direta:** Dê um **duplo clique no arquivo `index.html`** para abrir no seu navegador padrão.
+* **Via Servidor Local:**
+  ```bash
+  # Usando Python HTTP nativo:
+  python3 -m http.server 8000
+  
+  # Ou usando npx:
+  npx serve .
+  ```
+  Acesse: [http://localhost:8000/](http://localhost:8000/)
+
+---
+
+### 🖥️ Modo 2: Desktop Nativo (Linux)
+
+O aplicativo Desktop utiliza o motor nativo **Tauri v2**, consumindo apenas ~35MB de memória RAM.
+
+* **Baixar Instalador Pronto (Releases):**  
+  Baixe o pacote pré-compilado (`.deb` ou `.AppImage`) diretamente na aba de **[Releases](https://github.com/Pedr0bert/Scrumban/releases)** do repositório e instale com 2 cliques.
+
+* **Executar / Compilar via Código-Fonte:**
+  ```bash
+  # Instalar dependências:
+  npm install
+
+  # Executar a versão desktop em modo de desenvolvimento:
+  npm run tauri:dev
+
+  # Gerar os pacotes instaladores nativos (.deb / .AppImage):
+  npm run tauri:build
+  ```
 
 ---
 
@@ -51,26 +97,26 @@
 
 ### 6. Armazenamento & Arquitetura Modular
 - **Persistência Assíncrona no IndexedDB**: Banco local de alta capacidade (`scrumban_pessoal_db`) com contingência transparente em `localStorage`.
-- **Modularização em ES Modules Nativos**: Código decomposto em submódulos especializados em `js/`, todos rigorosamente abaixo de 350 linhas e com separação estrita de responsabilidades.
+- **Modularização em ES Modules Nativos**: Código decomposto em submódulos especializados em `js/`, com separação estrita de responsabilidades.
 - **Identificadores Criptograficamente Seguros**: Geração de UUIDs nativos via `crypto.randomUUID()`.
-- **Validação Formal de Backup**: Schema validation rigoroso ao importar arquivos JSON.
+- **Validação Formal de Backup**: Validação de esquema rigorosa ao importar arquivos JSON.
 
 ---
 
 ## 📁 Estrutura do Projeto
 
 ```
-v4/
-├── assets/
-│   └── icon.svg                      # Ícone vetorial da aplicação (Favicon)
+scrumban/
+├── assets/                           # Ícones e recursos visuais
+│   └── icon.svg                      # Ícone vetorial da aplicação
 ├── css/
 │   ├── input.css                     # Arquivo de entrada Tailwind CSS
 │   ├── style.css                     # Estilos customizados, Dark Mode e Mobile
 │   └── tailwind.min.css              # CSS compilado e minificado localmente
-├── js/
+├── js/                               # Módulos de lógica da aplicação
 │   ├── main.js                       # Ponto de entrada (ES Module) e bootstrap
 │   ├── state.js                      # Estado reativo, constantes e utilitários
-│   ├── storage.js                    # IndexedDB, persistência e validação de schema
+│   ├── storage.js                    # IndexedDB, persistência e validação
 │   ├── kanban.js                     # Renderização de colunas, ordenação e badges
 │   ├── drag-drop.js                  # DnD desktop nativo e gestos touch mobile
 │   ├── sprints.js                    # Planejamento de sprints e cabeçalho de ciclo
@@ -78,39 +124,22 @@ v4/
 │   ├── metrics.js                    # Lead Time, Cycle Time, Throughput e relatórios
 │   ├── task-details.js               # Modal de detalhes e checklist de subtarefas
 │   ├── task-edit.js                  # Modal de criação e edição de tarefas
-│   ├── config.js                     # Aba de configurações de projeto e limites
+│   ├── config.js                     # Configurações de projetos e limites
 │   ├── ui.js                         # Toasts, Undo, navegação de abas e atalhos
 │   ├── sidebar.js                    # Sidebar retrátil e drawer móvel
 │   ├── theme.js                      # Dark Mode e detecção de tema do sistema
 │   └── app.js                        # Bundle unificado gerado via esbuild
+├── src-tauri/                        # 🦀 Motor Desktop Nativo (Tauri v2 / Rust)
+│   ├── Cargo.toml                    # Dependências Rust
+│   ├── tauri.conf.json               # Configurações de janela, ícones e builds
+│   └── src/                          # Entrypoint nativo da aplicação desktop
+├── build-dist.js                     # Script de sincronização para build desktop
 ├── favicon.svg                       # Favicon raiz do projeto
 ├── index.html                        # Aplicação web completa
 ├── package.json                      # Dependências npm e scripts de build
-├── plano.md                          # Roadmap executivo com as fases concluídas e planejadas
-├── PLANO_DESKTOP_TAURI.md            # Especificação técnica para empacotamento Desktop (Tauri v2)
-├── PLANO_CAPTURA_REMOTA_TELEGRAM.md  # Especificação técnica para captura remota via Telegram Bot
-├── AVALIACAO_E_SOLUCOES.md           # Diagnóstico técnico de referência arquitetural
+├── LICENSE                           # Licença GNU General Public License v3.0
 └── README.md                         # Documentação oficial do projeto
 ```
-
----
-
-## 🚀 Como Executar
-
-A aplicação é **100% offline-first e autônoma**, funcionando de duas formas:
-
-### Opção 1: Execução Direta (Sem Servidor)
-Dê um **duplo clique no arquivo `index.html`** ou abra diretamente no seu navegador (`file:///caminho/para/v4/index.html`). O script bundle gerado em `js/app.js` é executado instantaneamente sem restrições de CORS.
-
-### Opção 2: Servidor Local de Desenvolvimento
-```bash
-# Servidor HTTP nativo do Python:
-python3 -m http.server 8000
-
-# Ou via npx:
-npx serve .
-```
-Acesse: [http://localhost:8000/](http://localhost:8000/)
 
 ---
 
@@ -119,7 +148,7 @@ Acesse: [http://localhost:8000/](http://localhost:8000/)
 O projeto mantém os códigos-fonte modulares em `js/` e compila Tailwind CSS e JS de forma ultrarrápida:
 
 ```bash
-# Build completo (CSS + JS):
+# Build completo do frontend Web e preparação do dist:
 npm run build
 
 # Observar alterações nos módulos JS (hot-bundle em ~20ms):
@@ -128,20 +157,23 @@ npm run watch:js
 # Observar alterações nos estilos Tailwind:
 npm run watch:css
 
-# Recompilar apenas o CSS:
-npm run build:css
+# Executar a aplicação desktop nativa (Tauri):
+npm run tauri:dev
+
+# Compilar o instalador nativo (.deb / .AppImage):
+npm run tauri:build
 ```
 
 ---
 
 ## 🔮 Próximas Fases Planejadas
 
-O projeto possui duas expansões detalhadas e arquitetadas prontas para implementação:
+- **Captura Remota de Tarefas via Telegram Bot:**
+  - Permite adicionar tarefas instantaneamente ao Backlog pelo celular via chatbot no Telegram usando mensagens rápidas com `#projeto`, `!alta` e `@prazo`, com sincronização automática quando o computador for aberto.
+  - Veja o plano completo em: [`PLANO_CAPTURA_REMOTA_TELEGRAM.md`](PLANO_CAPTURA_REMOTA_TELEGRAM.md).
 
-1. **Empacotamento Desktop Nativo com Tauri v2 (Fase 4.5):**
-   - Transforma a aplicação web em software desktop para Linux/macOS/Windows com consumo de apenas ~35MB de RAM, integrando ícone na bandeja do sistema e notificações nativas.
-   - Veja o plano completo em: [`PLANO_DESKTOP_TAURI.md`](PLANO_DESKTOP_TAURI.md).
+---
 
-2. **Captura Remota de Tarefas via Telegram Bot (Fase 5):**
-   - Permite adicionar tarefas instantaneamente ao Backlog pelo celular via chatbot no Telegram usando mensagens rápidas com `#projeto`, `!alta` e `@prazo`, com sincronização automática quando o computador for aberto.
-   - Veja o plano completo em: [`PLANO_CAPTURA_REMOTA_TELEGRAM.md`](PLANO_CAPTURA_REMOTA_TELEGRAM.md).
+## 📄 Licença
+
+Este projeto é software livre licenciado sob a **GNU General Public License v3.0 (GPLv3)**. Consulte o arquivo [LICENSE](LICENSE) para obter mais detalhes.
