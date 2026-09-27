@@ -23,7 +23,7 @@ export function abrirModalTarefa(taskId = null, options = {}) {
     const selectProjeto = document.getElementById('inputProjeto');
     if (selectProjeto) {
         selectProjeto.innerHTML = appState.settings.projects.map(p => `
-            <option value="${p}">${p}</option>
+            <option value="${escapeHTML(p)}">${escapeHTML(p)}</option>
         `).join('') + `<option value="__novo__">+ Cadastrar Novo Projeto...</option>`;
     }
 

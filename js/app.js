@@ -599,7 +599,7 @@ As tarefas cadastradas no quadro ser\xE3o mantidas, mas o ciclo atual ser\xE1 ca
     const selectProjeto = document.getElementById("inputProjeto");
     if (selectProjeto) {
       selectProjeto.innerHTML = appState.settings.projects.map((p) => `
-            <option value="${p}">${p}</option>
+            <option value="${escapeHTML(p)}">${escapeHTML(p)}</option>
         `).join("") + `<option value="__novo__">+ Cadastrar Novo Projeto...</option>`;
     }
     const selectParent = document.getElementById("inputParentId");
@@ -2734,6 +2734,290 @@ Esta a\xE7\xE3o n\xE3o poder\xE1 ser desfeita.`)) {
     }
   }
 
+  // js/sync.js
+  var SYNC_CONFIG_KEY = "scrumban_sync_config";
+  var INTERVALO_MIN_FOCO_MS = 30 * 1e3;
+  var DEBOUNCE_SNAPSHOT_MS = 8 * 1e3;
+  var TIMEOUT_REDE_MS = 15 * 1e3;
+  var PRIORIDADES = ["alta", "media", "baixa"];
+  var DIFICULDADES = ["trivial", "facil", "media", "dificil", "muito_dificil"];
+  var sincronizando = false;
+  var ultimaTentativa = 0;
+  var timerSnapshot = null;
+  var aplicandoRemoto = false;
+  function obterConfigSync() {
+    try {
+      const raw = localStorage.getItem(SYNC_CONFIG_KEY);
+      const cfg = raw ? JSON.parse(raw) : {};
+      return {
+        endpoint: typeof cfg.endpoint === "string" ? cfg.endpoint : "",
+        token: typeof cfg.token === "string" ? cfg.token : "",
+        auto: cfg.auto !== false,
+        lastSyncAt: cfg.lastSyncAt || null,
+        lastError: cfg.lastError || null
+      };
+    } catch {
+      return { endpoint: "", token: "", auto: true, lastSyncAt: null, lastError: null };
+    }
+  }
+  function gravarConfigSync(parcial) {
+    const cfg = { ...obterConfigSync(), ...parcial };
+    localStorage.setItem(SYNC_CONFIG_KEY, JSON.stringify(cfg));
+    return cfg;
+  }
+  function syncConfigurado(cfg = obterConfigSync()) {
+    return !!(cfg.endpoint && cfg.token);
+  }
+  function normalizarEndpoint(url) {
+    return String(url || "").trim().replace(/\/+$/, "").replace(/\/api(\/inbox)?$/, "");
+  }
+  async function chamarApi(caminho, { method = "GET", body } = {}, cfg = obterConfigSync()) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_REDE_MS);
+    try {
+      const resp = await fetch(`${cfg.endpoint}${caminho}`, {
+        method,
+        headers: {
+          "Authorization": `Bearer ${cfg.token}`,
+          ...body !== void 0 ? { "Content-Type": "application/json" } : {}
+        },
+        body: body !== void 0 ? JSON.stringify(body) : void 0,
+        signal: controller.signal
+      });
+      const dados = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        const msg = resp.status === 401 ? "Token inv\xE1lido (401)" : dados.error || `HTTP ${resp.status}`;
+        throw new Error(msg);
+      }
+      return dados;
+    } catch (e) {
+      if (e.name === "AbortError") throw new Error("Tempo de conex\xE3o esgotado");
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  function reindexarColuna(coluna) {
+    appState.tasks.filter((t) => t.column === coluna).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).forEach((t, idx) => {
+      t.order = idx;
+    });
+  }
+  function aplicarCriacao(op) {
+    const p = op.payload || {};
+    const id = typeof p.taskId === "string" ? p.taskId : op.id;
+    if (appState.tasks.some((t) => t.id === id)) return { ok: true, duplicada: true };
+    const titulo = String(p.title || "").trim().slice(0, 300);
+    if (!titulo) return { ok: false, motivo: "sem t\xEDtulo" };
+    let projeto = typeof p.project === "string" && p.project.trim() ? p.project.trim().slice(0, 80) : null;
+    if (!projeto) projeto = appState.settings.projects[0] || "Geral";
+    let projetoNovo = false;
+    if (!appState.settings.projects.includes(projeto)) {
+      appState.settings.projects.push(projeto);
+      projetoNovo = true;
+    }
+    const curSprint = appState.sprints.find((s) => s.status === "current");
+    appState.tasks.forEach((t) => {
+      if (t.column === "backlog") t.order = (t.order ?? 0) + 1;
+    });
+    appState.tasks.unshift({
+      id,
+      title: titulo,
+      description: String(p.description || "").slice(0, 4e3),
+      priority: PRIORIDADES.includes(p.priority) ? p.priority : "media",
+      difficulty: DIFICULDADES.includes(p.difficulty) ? p.difficulty : "media",
+      column: "backlog",
+      order: 0,
+      project: projeto,
+      dueDate: /^\d{4}-\d{2}-\d{2}$/.test(p.dueDate || "") ? p.dueDate : "",
+      subtasks: [],
+      images: [],
+      parentId: null,
+      sprintId: curSprint ? curSprint.id : null,
+      createdAt: p.createdAt || op.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
+      source: op.source || "remoto"
+    });
+    return { ok: true, projetoNovo };
+  }
+  function aplicarMovimento(op) {
+    const p = op.payload || {};
+    const tarefa = appState.tasks.find((t) => t.id === p.taskId);
+    if (!tarefa) return { ok: false, motivo: "tarefa n\xE3o encontrada (arquivada ou exclu\xEDda?)" };
+    if (!COLUNAS.includes(p.column)) return { ok: false, motivo: `coluna inv\xE1lida "${p.column}"` };
+    const antiga = tarefa.column;
+    if (antiga === p.column) return { ok: true };
+    tarefa.column = p.column;
+    if (p.column === "progress" && !tarefa.startedAt) tarefa.startedAt = p.requestedAt || (/* @__PURE__ */ new Date()).toISOString();
+    if (p.column === "done") tarefa.completedAt = p.requestedAt || (/* @__PURE__ */ new Date()).toISOString();
+    else if (antiga === "done") delete tarefa.completedAt;
+    const maxOrdem = appState.tasks.filter((t) => t.column === p.column && t.id !== tarefa.id).reduce((m, t) => Math.max(m, t.order ?? 0), -1);
+    tarefa.order = maxOrdem + 1;
+    reindexarColuna(antiga);
+    reindexarColuna(p.column);
+    return { ok: true };
+  }
+  function montarSnapshot() {
+    const cur = appState.sprints.find((s) => s.status === "current");
+    return {
+      version: 1,
+      generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      projects: [...appState.settings.projects],
+      wipLimit: appState.settings.wipLimit,
+      currentSprint: cur ? { id: cur.id, name: cur.name, endDate: cur.endDate || null } : null,
+      tasks: appState.tasks.map((t) => ({
+        id: t.id,
+        title: t.title,
+        column: t.column,
+        priority: t.priority || "media",
+        difficulty: t.difficulty || "media",
+        project: t.project || "",
+        dueDate: t.dueDate || "",
+        parentId: t.parentId || null,
+        order: t.order ?? 0,
+        description: (t.description || "").slice(0, 500),
+        subtasks: {
+          done: (t.subtasks || []).filter((s) => s.done).length,
+          total: (t.subtasks || []).length
+        }
+      }))
+    };
+  }
+  async function publicarSnapshot() {
+    const cfg = obterConfigSync();
+    if (!syncConfigurado(cfg)) return false;
+    clearTimeout(timerSnapshot);
+    timerSnapshot = null;
+    await chamarApi("/api/snapshot", { method: "PUT", body: montarSnapshot() }, cfg);
+    return true;
+  }
+  function agendarPublicacaoSnapshot() {
+    if (aplicandoRemoto) return;
+    const cfg = obterConfigSync();
+    if (!syncConfigurado(cfg) || !cfg.auto) return;
+    clearTimeout(timerSnapshot);
+    timerSnapshot = setTimeout(() => {
+      publicarSnapshot().catch((e) => console.warn("Scrumban sync: falha ao publicar snapshot:", e.message));
+    }, DEBOUNCE_SNAPSHOT_MS);
+  }
+  async function sincronizarRemoto({ silencioso = false } = {}) {
+    const cfg = obterConfigSync();
+    if (!syncConfigurado(cfg)) {
+      if (!silencioso) mostrarToast("Configure o endpoint e o token do Acesso Remoto em Configura\xE7\xF5es.", "erro");
+      return;
+    }
+    if (sincronizando) return;
+    sincronizando = true;
+    ultimaTentativa = Date.now();
+    atualizarStatusSyncUI("Sincronizando\u2026");
+    try {
+      const { items = [] } = await chamarApi("/api/inbox", {}, cfg);
+      const aplicadas = [];
+      const falhas = [];
+      let criadas = 0;
+      let movidas = 0;
+      let projetosNovos = false;
+      aplicandoRemoto = true;
+      for (const op of items) {
+        let r;
+        if (op.type === "create") r = aplicarCriacao(op);
+        else if (op.type === "move") r = aplicarMovimento(op);
+        else r = { ok: false, motivo: `tipo desconhecido "${op.type}"` };
+        aplicadas.push(op.id);
+        if (r.ok) {
+          if (op.type === "create" && !r.duplicada) criadas++;
+          if (op.type === "move") movidas++;
+          if (r.projetoNovo) projetosNovos = true;
+        } else {
+          falhas.push(`${op.type}: ${r.motivo}`);
+        }
+      }
+      if (criadas || movidas) {
+        await saveState();
+      }
+      aplicandoRemoto = false;
+      if (aplicadas.length) {
+        await chamarApi("/api/inbox/ack", { method: "POST", body: { ids: aplicadas } }, cfg);
+      }
+      if (criadas || movidas) {
+        if (projetosNovos) atualizarFiltrosUI();
+        renderizarQuadro();
+        const partes = [];
+        if (criadas) partes.push(`${criadas} nova(s) tarefa(s)`);
+        if (movidas) partes.push(`${movidas} movimenta\xE7\xE3o(\xF5es)`);
+        mostrarToast(`\u{1F4E5} Remoto: ${partes.join(" e ")} importada(s).`, "sucesso", 5e3);
+      } else if (!silencioso) {
+        mostrarToast("Inbox remota vazia \u2014 tudo em dia.", "info", 2500);
+      }
+      if (falhas.length) {
+        console.warn("Scrumban sync: opera\xE7\xF5es ignoradas:", falhas);
+        mostrarToast(`${falhas.length} opera\xE7\xE3o(\xF5es) remota(s) ignorada(s): ${falhas[0]}`, "aviso", 6e3);
+      }
+      await publicarSnapshot();
+      gravarConfigSync({ lastSyncAt: (/* @__PURE__ */ new Date()).toISOString(), lastError: null });
+      atualizarStatusSyncUI();
+    } catch (e) {
+      aplicandoRemoto = false;
+      console.warn("Scrumban sync falhou:", e);
+      gravarConfigSync({ lastError: e.message || String(e) });
+      atualizarStatusSyncUI();
+      if (!silencioso) mostrarToast(`Falha na sincroniza\xE7\xE3o remota: ${e.message}`, "erro", 6e3);
+    } finally {
+      sincronizando = false;
+    }
+  }
+  function renderizarConfigSync() {
+    const cfg = obterConfigSync();
+    const elEndpoint = document.getElementById("configSyncEndpoint");
+    const elToken = document.getElementById("configSyncToken");
+    const elAuto = document.getElementById("configSyncAuto");
+    if (elEndpoint) elEndpoint.value = cfg.endpoint;
+    if (elToken) elToken.value = cfg.token;
+    if (elAuto) elAuto.checked = cfg.auto;
+    atualizarStatusSyncUI();
+  }
+  function salvarConfigSync() {
+    const endpoint = normalizarEndpoint(document.getElementById("configSyncEndpoint")?.value);
+    const token = (document.getElementById("configSyncToken")?.value || "").trim();
+    const auto = !!document.getElementById("configSyncAuto")?.checked;
+    if (endpoint && !/^https:\/\//i.test(endpoint) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(endpoint)) {
+      mostrarToast("Use uma URL HTTPS (HTTP s\xF3 \xE9 aceito para localhost).", "erro");
+      return;
+    }
+    gravarConfigSync({ endpoint, token, auto, lastError: null });
+    renderizarConfigSync();
+    mostrarToast(endpoint && token ? "Acesso remoto configurado." : "Acesso remoto desativado.", "sucesso");
+    if (endpoint && token) sincronizarRemoto({ silencioso: false });
+  }
+  function removerConfigSync() {
+    localStorage.removeItem(SYNC_CONFIG_KEY);
+    renderizarConfigSync();
+    mostrarToast("Configura\xE7\xE3o de acesso remoto removida deste dispositivo.", "info");
+  }
+  function atualizarStatusSyncUI(textoForcado) {
+    const el = document.getElementById("configSyncStatus");
+    if (!el) return;
+    const cfg = obterConfigSync();
+    let html;
+    if (textoForcado) html = escapeHTML(textoForcado);
+    else if (!syncConfigurado(cfg)) html = "N\xE3o configurado";
+    else if (cfg.lastError) html = `<span class="text-terracota">Erro: ${escapeHTML(cfg.lastError)}</span>`;
+    else if (cfg.lastSyncAt) html = `\xDAltima sincroniza\xE7\xE3o: ${escapeHTML(new Date(cfg.lastSyncAt).toLocaleString("pt-BR"))}`;
+    else html = "Configurado \u2014 ainda n\xE3o sincronizado";
+    el.innerHTML = html;
+  }
+  function inicializarSync() {
+    registrarObservadorSalvamento(agendarPublicacaoSnapshot);
+    const cfg = obterConfigSync();
+    if (syncConfigurado(cfg) && cfg.auto) {
+      sincronizarRemoto({ silencioso: true });
+    }
+    window.addEventListener("focus", () => {
+      const atual = obterConfigSync();
+      if (!syncConfigurado(atual) || !atual.auto) return;
+      if (Date.now() - ultimaTentativa < INTERVALO_MIN_FOCO_MS) return;
+      sincronizarRemoto({ silencioso: true });
+    });
+  }
+
   // js/config.js
   function renderizarAbaConfig() {
     const inputWip = document.getElementById("configWipLimit");
@@ -2751,6 +3035,7 @@ Esta a\xE7\xE3o n\xE3o poder\xE1 ser desfeita.`)) {
     }
     atualizarUIModoSubtasksVisibilidade();
     atualizarUIModoTema(obterPreferenciaTema(), ehTemaEscuroAtivo());
+    renderizarConfigSync();
   }
   function salvarConfigSubtasksVisibilidade(modo) {
     const novoModo = modo === "parent_only" ? "parent_only" : "all";
@@ -3289,6 +3574,10 @@ Esta a\xE7\xE3o n\xE3o poder\xE1 ser desfeita.`)) {
     }
     garantirOrdemTarefas();
   }
+  var observadoresSalvamento = /* @__PURE__ */ new Set();
+  function registrarObservadorSalvamento(fn) {
+    if (typeof fn === "function") observadoresSalvamento.add(fn);
+  }
   async function saveState() {
     try {
       if (idbConectado) {
@@ -3298,6 +3587,13 @@ Esta a\xE7\xE3o n\xE3o poder\xE1 ser desfeita.`)) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
       } catch (_) {
       }
+      observadoresSalvamento.forEach((fn) => {
+        try {
+          fn();
+        } catch (eObs) {
+          console.warn("Observador de salvamento falhou:", eObs);
+        }
+      });
     } catch (e) {
       console.error("Falha ao salvar dados:", e);
       mostrarToast("Erro ao salvar dados localmente. Verifique o espa\xE7o em disco do navegador.", "erro", 6e3);
@@ -3618,7 +3914,10 @@ Esta a\xE7\xE3o n\xE3o poder\xE1 ser desfeita.`)) {
     recolherColunaExpandida,
     toggleExpandirColuna,
     expandirColunaVizinha,
-    obterColunaExpandidaAtiva
+    obterColunaExpandidaAtiva,
+    sincronizarRemoto: () => sincronizarRemoto({ silencioso: false }),
+    salvarConfigSync,
+    removerConfigSync
   };
   Object.entries(globalBindings).forEach(([nome, fn]) => {
     window[nome] = fn;
@@ -3635,6 +3934,7 @@ Esta a\xE7\xE3o n\xE3o poder\xE1 ser desfeita.`)) {
     inicializarFiltros();
     renderizarQuadro();
     verificarLembreteBackup();
+    inicializarSync();
   }
   window.bootstrapApp = bootstrapApp;
   if (document.readyState === "loading") {

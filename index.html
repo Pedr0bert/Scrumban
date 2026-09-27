@@ -689,6 +689,36 @@
                     </div>
                 </div>
 
+                <!-- Acesso Remoto (Telegram / App Mobile) -->
+                <div class="bg-white p-6 border border-beige rounded-sm shadow-xs">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="font-serif text-xl font-bold text-dark">Acesso Remoto (Telegram)</h3>
+                        <span id="configSyncStatus" class="text-xs font-mono px-2 py-0.5 rounded-sm bg-beige text-gray-700">Não configurado</span>
+                    </div>
+                    <p class="font-serif text-sm text-gray-600 mb-4">
+                        Importa tarefas e movimentações enviadas pelo bot do Telegram e publica uma fotografia do quadro para consultas remotas. O token fica salvo apenas neste dispositivo e não entra nos backups JSON. Veja <code>telegram-bot/README.md</code>.
+                    </p>
+                    <div class="grid grid-cols-1 gap-3 mb-4">
+                        <label class="block">
+                            <span class="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1">Endpoint do Worker</span>
+                            <input type="url" id="configSyncEndpoint" placeholder="https://scrumban-bot.seu-usuario.workers.dev" autocomplete="off" spellcheck="false" class="w-full p-2 bg-white text-dark border border-beige rounded-sm text-sm focus:outline-none focus:border-terracota shadow-2xs font-mono">
+                        </label>
+                        <label class="block">
+                            <span class="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1">Token de acesso (API_KEY)</span>
+                            <input type="password" id="configSyncToken" placeholder="Cole aqui a API_KEY configurada no Worker" autocomplete="off" class="w-full p-2 bg-white text-dark border border-beige rounded-sm text-sm focus:outline-none focus:border-terracota shadow-2xs font-mono">
+                        </label>
+                        <label class="flex items-center gap-2 text-sm font-serif text-dark cursor-pointer select-none">
+                            <input type="checkbox" id="configSyncAuto" class="scrumban-checkbox" checked>
+                            Sincronizar automaticamente (ao abrir, ao focar a janela e após alterações)
+                        </label>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <button type="button" onclick="salvarConfigSync()" class="bg-musgo text-white font-serif px-4 py-2 rounded-sm text-sm">Salvar & Conectar</button>
+                        <button type="button" onclick="sincronizarRemoto()" class="border border-beige bg-offwhite hover:bg-beige text-dark font-serif px-4 py-2 rounded-sm text-sm">Sincronizar agora</button>
+                        <button type="button" onclick="removerConfigSync()" class="text-xs text-gray-500 hover:text-terracota underline ml-auto font-serif">Desconectar este dispositivo</button>
+                    </div>
+                </div>
+
                 <!-- Backup de Dados -->
                 <div class="bg-white p-6 border border-beige rounded-sm shadow-xs">
                     <h3 class="font-serif text-xl font-bold text-dark mb-2">Backup & Exportação</h3>

@@ -155,6 +155,13 @@ import {
 } from './sidebar.js';
 
 import {
+    inicializarSync,
+    sincronizarRemoto,
+    salvarConfigSync,
+    removerConfigSync
+} from './sync.js';
+
+import {
     obterPreferenciaTema,
     ehTemaEscuroAtivo,
     aplicarTema,
@@ -245,7 +252,10 @@ const globalBindings = {
     recolherColunaExpandida,
     toggleExpandirColuna,
     expandirColunaVizinha,
-    obterColunaExpandidaAtiva
+    obterColunaExpandidaAtiva,
+    sincronizarRemoto: () => sincronizarRemoto({ silencioso: false }),
+    salvarConfigSync,
+    removerConfigSync
 };
 
 Object.entries(globalBindings).forEach(([nome, fn]) => {
@@ -264,6 +274,7 @@ async function bootstrapApp() {
     inicializarFiltros();
     renderizarQuadro();
     verificarLembreteBackup();
+    inicializarSync();
 }
 
 window.bootstrapApp = bootstrapApp;

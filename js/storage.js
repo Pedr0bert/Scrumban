@@ -150,6 +150,12 @@ export async function inicializarArmazenamento() {
     garantirOrdemTarefas();
 }
 
+// Observadores notificados após cada persistência (ex.: publicação do snapshot remoto em js/sync.js)
+const observadoresSalvamento = new Set();
+export function registrarObservadorSalvamento(fn) {
+    if (typeof fn === 'function') observadoresSalvamento.add(fn);
+}
+
 export async function saveState() {
     try {
         if (idbConectado) {
@@ -158,6 +164,9 @@ export async function saveState() {
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
         } catch (_) {}
+        observadoresSalvamento.forEach(fn => {
+            try { fn(); } catch (eObs) { console.warn('Observador de salvamento falhou:', eObs); }
+        });
     } catch (e) {
         console.error('Falha ao salvar dados:', e);
         mostrarToast('Erro ao salvar dados localmente. Verifique o espaço em disco do navegador.', 'erro', 6000);
