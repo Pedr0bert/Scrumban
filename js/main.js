@@ -144,7 +144,8 @@ import {
     abrirModalAtalhos,
     fecharModalAtalhos,
     inicializarEventosModais,
-    inicializarAtalhosTeclado
+    inicializarAtalhosTeclado,
+    inicializarComportamentoDatas
 } from './ui.js';
 
 import {
@@ -270,6 +271,7 @@ async function bootstrapApp() {
     inicializarColunasDrop();
     inicializarEventosModais();
     inicializarAtalhosTeclado();
+    inicializarComportamentoDatas();
     atualizarFiltrosUI();
     inicializarFiltros();
     renderizarQuadro();

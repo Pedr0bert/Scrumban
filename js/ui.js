@@ -363,3 +363,24 @@ export function inicializarAtalhosTeclado() {
         }
     });
 }
+
+// ================= COMPORTAMENTO DE CAMPOS DE DATA (CALENDÁRIO NATIVO) =================
+
+/**
+ * No app Desktop (Tauri/WebKitGTK no Linux), o calendário nativo do
+ * <input type="date"> é um popover do GTK renderizado por fora do DOM.
+ * Cliques fora do campo não chegam a esse popover como um "clique externo"
+ * (só o Esc, que aciona blur(), fecha — ver inicializarAtalhosTeclado acima).
+ * Para restaurar o fluxo esperado, forçamos blur() no campo de data sempre
+ * que o usuário clica em qualquer outro elemento da página, o que fecha o
+ * calendário sem interferir no clique nesse outro elemento.
+ */
+export function inicializarComportamentoDatas() {
+    document.addEventListener('pointerdown', (e) => {
+        const ativo = document.activeElement;
+        const ehCampoData = ativo && ativo.tagName === 'INPUT' && ativo.type === 'date';
+        if (ehCampoData && e.target !== ativo) {
+            ativo.blur();
+        }
+    }, true);
+}

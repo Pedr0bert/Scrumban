@@ -3,7 +3,7 @@
  * Modulo ES: Cabeçalho com ciclo atual/passado/futuro e tela de planejamento de sprints.
  */
 
-import { appState, gerarId, formatarData, formatarDataCurta, escapeHTML } from './state.js';
+import { appState, gerarId, formatarData, formatarDataCurta, escapeHTML, hojeISOLocal } from './state.js';
 import { saveState } from './storage.js';
 import { mostrarToast } from './ui.js';
 import { renderizarQuadro } from './kanban.js';
@@ -131,9 +131,17 @@ export function renderizarHeaderSprints() {
     const elCur = document.getElementById('header-sprint-current');
     if (elCur) {
         if (curSprint) {
+            const hoje = hojeISOLocal();
+            const diasAtraso = curSprint.endDate && curSprint.endDate < hoje
+                ? Math.round((new Date(hoje) - new Date(curSprint.endDate)) / 86400000)
+                : 0;
+            const sprintVencida = diasAtraso > 0;
+
             let diasRestantesTxt = '';
             if (curSprint.endDate) {
-                diasRestantesTxt = `Termina em ${formatarDataCurta(curSprint.endDate)}`;
+                diasRestantesTxt = sprintVencida
+                    ? `<span class="text-terracota font-bold">Venceu em ${formatarDataCurta(curSprint.endDate)} (${diasAtraso}d atrasada)</span>`
+                    : `Termina em ${formatarDataCurta(curSprint.endDate)}`;
             }
 
             const progresso = calcularProgressoSprint();
@@ -145,11 +153,16 @@ export function renderizarHeaderSprints() {
             if (progresso.tarefasDone > 0) tooltipProgresso += ` • ${progresso.tarefasDone} card(s) em Done`;
             if (progresso.totalChecklist > 0) tooltipProgresso += ` • ${progresso.checklistDone}/${progresso.totalChecklist} itens de checklist`;
             if (progresso.totalFilhas > 0) tooltipProgresso += ` • ${progresso.filhasDone}/${progresso.totalFilhas} sub-tarefas filhas`;
+            if (sprintVencida) tooltipProgresso += ` • Prazo da sprint vencido há ${diasAtraso} dia(s)`;
+
+            elCur.classList.toggle('border-terracota', sprintVencida);
+            elCur.classList.toggle('animate-pulse', false);
 
             elCur.innerHTML = `
                 <div class="min-w-0 flex-1">
-                    <p class="text-xs font-bold uppercase tracking-wider text-terracota mb-0.5 sm:mb-1 truncate">
-                        Atual ${diasRestantesTxt ? '• ' + diasRestantesTxt : ''}
+                    <p class="text-xs font-bold uppercase tracking-wider text-terracota mb-0.5 sm:mb-1 truncate flex items-center gap-1.5">
+                        ${sprintVencida ? `<svg class="w-3.5 h-3.5 text-terracota shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>` : ''}
+                        <span class="truncate">Atual ${diasRestantesTxt ? '• ' + diasRestantesTxt : ''}</span>
                     </p>
                     <h2 class="font-serif text-xl sm:text-2xl lg:text-3xl font-bold leading-none text-dark truncate" title="${escapeHTML(curSprint.name)}">
                         ${escapeHTML(curSprint.name)}
@@ -211,22 +224,30 @@ export function renderizarAbaSprints() {
     const fragment = document.createDocumentFragment();
 
     // 1. Card da Sprint Atual
+    const hojeIso = hojeISOLocal();
+    const sprintVencidaTab = !!(cur && cur.endDate && cur.endDate < hojeIso);
     const sprintAtualWrapper = document.createElement('div');
     sprintAtualWrapper.className = 'mb-8 p-6 bg-white border-2 border-terracota rounded-sm shadow-sm relative';
     sprintAtualWrapper.innerHTML = `
         <span class="absolute -top-3 left-6 bg-terracota text-white text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm">
-            Sprint Atual em Andamento
+            ${sprintVencidaTab ? '⚠️ Sprint Atual — Prazo Vencido' : 'Sprint Atual em Andamento'}
         </span>
         ${cur ? (() => {
             const prog = calcularProgressoSprint();
             const concluidasStr = Number(prog.progressoEquivalente.toFixed(1)).toString();
+            const diasAtrasoTab = sprintVencidaTab ? Math.round((new Date(hojeIso) - new Date(cur.endDate)) / 86400000) : 0;
             return `
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div class="min-w-0 flex-1">
                     <h3 class="font-serif text-2xl font-bold text-dark mb-1">${escapeHTML(cur.name)}</h3>
                     ${cur.description ? `<p class="sprint-descricao-box text-sm font-sans text-dark mt-2 mb-3 whitespace-pre-line p-3 rounded-sm leading-relaxed">${escapeHTML(cur.description)}</p>` : ''}
+                    ${sprintVencidaTab ? `
+                    <div class="mb-3 p-2.5 rounded-sm bg-red-50 border border-terracota/40 text-terracota text-sm font-serif flex items-center gap-2">
+                        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                        <span>O período desta sprint terminou há <strong>${diasAtrasoTab} dia${diasAtrasoTab === 1 ? '' : 's'}</strong>. Conclua e arquive o ciclo, ou edite a data de término para estendê-lo.</span>
+                    </div>` : ''}
                     <p class="text-sm font-sans text-gray-600 mb-3">
-                        Período: <strong class="text-dark">${formatarData(cur.startDate)}</strong> até <strong class="text-dark">${formatarData(cur.endDate)}</strong>
+                        Período: <strong class="text-dark">${formatarData(cur.startDate)}</strong> até <strong class="${sprintVencidaTab ? 'text-terracota font-bold' : 'text-dark'}">${formatarData(cur.endDate)}</strong>
                     </p>
                     <div class="max-w-md bg-offwhite/80 p-2.5 rounded-sm border border-beige/60">
                         <div class="flex items-center justify-between text-xs mb-1.5 font-sans">

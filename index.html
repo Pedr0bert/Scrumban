@@ -15,6 +15,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,300;0,400;0,600;0,700;1,400;1,600&display=swap" rel="stylesheet">
     
     <!-- Configuração de Tema & Prevenção de FOUC -->
+    <!-- "light dark" aqui é só o valor inicial antes do CSS carregar (evita flash).
+         O tema real dos widgets nativos (select, checkbox, calendário) é travado
+         por "color-scheme" em css/style.css, seguindo html.dark, e não o SO. -->
     <meta name="color-scheme" content="light dark">
     <script>
         (function() {
