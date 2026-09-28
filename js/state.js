@@ -89,6 +89,16 @@ export function gerarId(prefixo = '') {
     return prefixo ? `${prefixo}-${fallback}` : fallback;
 }
 
+// Data de "hoje" no fuso local, no formato YYYY-MM-DD (evita bugs de fuso horário
+// que ocorreriam com new Date().toISOString().slice(0, 10), que usa UTC)
+export function hojeISOLocal() {
+    const hoje = new Date();
+    const ano = hoje.getFullYear();
+    const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+    const dia = String(hoje.getDate()).padStart(2, '0');
+    return `${ano}-${mes}-${dia}`;
+}
+
 // Formatação de datas
 export function formatarData(dataIso) {
     if (!dataIso) return '';

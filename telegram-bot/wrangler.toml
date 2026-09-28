@@ -1,0 +1,20 @@
+name = "scrumban-bot"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+[vars]
+# Fuso usado para interpretar @hoje, @amanha, @sex etc.
+TIME_ZONE = "America/Sao_Paulo"
+
+# Crie o banco com: npx wrangler d1 create scrumban-bot
+# e cole o database_id gerado abaixo.
+[[d1_databases]]
+binding = "DB"
+database_name = "scrumban-bot"
+database_id = "00000000-0000-0000-0000-000000000000"
+
+# Segredos (NÃO coloque aqui — use `npx wrangler secret put <NOME>`):
+#   TELEGRAM_BOT_TOKEN       token do @BotFather
+#   TELEGRAM_WEBHOOK_SECRET  string aleatória validada no header X-Telegram-Bot-Api-Secret-Token
+#   TELEGRAM_ALLOWED_USER_ID seu user id numérico (vários separados por vírgula)
+#   API_KEY                  chave usada pelo desktop/app mobile em Authorization: Bearer

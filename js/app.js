@@ -70,6 +70,13 @@
     const fallback = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
     return prefixo ? `${prefixo}-${fallback}` : fallback;
   }
+  function hojeISOLocal() {
+    const hoje = /* @__PURE__ */ new Date();
+    const ano = hoje.getFullYear();
+    const mes = String(hoje.getMonth() + 1).padStart(2, "0");
+    const dia = String(hoje.getDate()).padStart(2, "0");
+    return `${ano}-${mes}-${dia}`;
+  }
   function formatarData(dataIso) {
     if (!dataIso) return "";
     try {
@@ -288,9 +295,12 @@
     const elCur = document.getElementById("header-sprint-current");
     if (elCur) {
       if (curSprint) {
+        const hoje = hojeISOLocal();
+        const diasAtraso = curSprint.endDate && curSprint.endDate < hoje ? Math.round((new Date(hoje) - new Date(curSprint.endDate)) / 864e5) : 0;
+        const sprintVencida = diasAtraso > 0;
         let diasRestantesTxt = "";
         if (curSprint.endDate) {
-          diasRestantesTxt = `Termina em ${formatarDataCurta(curSprint.endDate)}`;
+          diasRestantesTxt = sprintVencida ? `<span class="text-terracota font-bold">Venceu em ${formatarDataCurta(curSprint.endDate)} (${diasAtraso}d atrasada)</span>` : `Termina em ${formatarDataCurta(curSprint.endDate)}`;
         }
         const progresso = calcularProgressoSprint();
         const concluidasStr = Number(progresso.progressoEquivalente.toFixed(1)).toString();
@@ -300,10 +310,14 @@
         if (progresso.tarefasDone > 0) tooltipProgresso += ` \u2022 ${progresso.tarefasDone} card(s) em Done`;
         if (progresso.totalChecklist > 0) tooltipProgresso += ` \u2022 ${progresso.checklistDone}/${progresso.totalChecklist} itens de checklist`;
         if (progresso.totalFilhas > 0) tooltipProgresso += ` \u2022 ${progresso.filhasDone}/${progresso.totalFilhas} sub-tarefas filhas`;
+        if (sprintVencida) tooltipProgresso += ` \u2022 Prazo da sprint vencido h\xE1 ${diasAtraso} dia(s)`;
+        elCur.classList.toggle("border-terracota", sprintVencida);
+        elCur.classList.toggle("animate-pulse", false);
         elCur.innerHTML = `
                 <div class="min-w-0 flex-1">
-                    <p class="text-xs font-bold uppercase tracking-wider text-terracota mb-0.5 sm:mb-1 truncate">
-                        Atual ${diasRestantesTxt ? "\u2022 " + diasRestantesTxt : ""}
+                    <p class="text-xs font-bold uppercase tracking-wider text-terracota mb-0.5 sm:mb-1 truncate flex items-center gap-1.5">
+                        ${sprintVencida ? `<svg class="w-3.5 h-3.5 text-terracota shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>` : ""}
+                        <span class="truncate">Atual ${diasRestantesTxt ? "\u2022 " + diasRestantesTxt : ""}</span>
                     </p>
                     <h2 class="font-serif text-xl sm:text-2xl lg:text-3xl font-bold leading-none text-dark truncate" title="${escapeHTML(curSprint.name)}">
                         ${escapeHTML(curSprint.name)}
@@ -358,22 +372,30 @@
     const future = appState.sprints.filter((s) => s.status === "future");
     container.innerHTML = "";
     const fragment = document.createDocumentFragment();
+    const hojeIso = hojeISOLocal();
+    const sprintVencidaTab = !!(cur && cur.endDate && cur.endDate < hojeIso);
     const sprintAtualWrapper = document.createElement("div");
     sprintAtualWrapper.className = "mb-8 p-6 bg-white border-2 border-terracota rounded-sm shadow-sm relative";
     sprintAtualWrapper.innerHTML = `
         <span class="absolute -top-3 left-6 bg-terracota text-white text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm">
-            Sprint Atual em Andamento
+            ${sprintVencidaTab ? "\u26A0\uFE0F Sprint Atual \u2014 Prazo Vencido" : "Sprint Atual em Andamento"}
         </span>
         ${cur ? (() => {
       const prog = calcularProgressoSprint();
       const concluidasStr = Number(prog.progressoEquivalente.toFixed(1)).toString();
+      const diasAtrasoTab = sprintVencidaTab ? Math.round((new Date(hojeIso) - new Date(cur.endDate)) / 864e5) : 0;
       return `
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div class="min-w-0 flex-1">
                     <h3 class="font-serif text-2xl font-bold text-dark mb-1">${escapeHTML(cur.name)}</h3>
                     ${cur.description ? `<p class="sprint-descricao-box text-sm font-sans text-dark mt-2 mb-3 whitespace-pre-line p-3 rounded-sm leading-relaxed">${escapeHTML(cur.description)}</p>` : ""}
+                    ${sprintVencidaTab ? `
+                    <div class="mb-3 p-2.5 rounded-sm bg-red-50 border border-terracota/40 text-terracota text-sm font-serif flex items-center gap-2">
+                        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                        <span>O per\xEDodo desta sprint terminou h\xE1 <strong>${diasAtrasoTab} dia${diasAtrasoTab === 1 ? "" : "s"}</strong>. Conclua e arquive o ciclo, ou edite a data de t\xE9rmino para estend\xEA-lo.</span>
+                    </div>` : ""}
                     <p class="text-sm font-sans text-gray-600 mb-3">
-                        Per\xEDodo: <strong class="text-dark">${formatarData(cur.startDate)}</strong> at\xE9 <strong class="text-dark">${formatarData(cur.endDate)}</strong>
+                        Per\xEDodo: <strong class="text-dark">${formatarData(cur.startDate)}</strong> at\xE9 <strong class="${sprintVencidaTab ? "text-terracota font-bold" : "text-dark"}">${formatarData(cur.endDate)}</strong>
                     </p>
                     <div class="max-w-md bg-offwhite/80 p-2.5 rounded-sm border border-beige/60">
                         <div class="flex items-center justify-between text-xs mb-1.5 font-sans">
@@ -599,7 +621,7 @@ As tarefas cadastradas no quadro ser\xE3o mantidas, mas o ciclo atual ser\xE1 ca
     const selectProjeto = document.getElementById("inputProjeto");
     if (selectProjeto) {
       selectProjeto.innerHTML = appState.settings.projects.map((p) => `
-            <option value="${p}">${p}</option>
+            <option value="${escapeHTML(p)}">${escapeHTML(p)}</option>
         `).join("") + `<option value="__novo__">+ Cadastrar Novo Projeto...</option>`;
     }
     const selectParent = document.getElementById("inputParentId");
@@ -2734,6 +2756,290 @@ Esta a\xE7\xE3o n\xE3o poder\xE1 ser desfeita.`)) {
     }
   }
 
+  // js/sync.js
+  var SYNC_CONFIG_KEY = "scrumban_sync_config";
+  var INTERVALO_MIN_FOCO_MS = 30 * 1e3;
+  var DEBOUNCE_SNAPSHOT_MS = 8 * 1e3;
+  var TIMEOUT_REDE_MS = 15 * 1e3;
+  var PRIORIDADES = ["alta", "media", "baixa"];
+  var DIFICULDADES = ["trivial", "facil", "media", "dificil", "muito_dificil"];
+  var sincronizando = false;
+  var ultimaTentativa = 0;
+  var timerSnapshot = null;
+  var aplicandoRemoto = false;
+  function obterConfigSync() {
+    try {
+      const raw = localStorage.getItem(SYNC_CONFIG_KEY);
+      const cfg = raw ? JSON.parse(raw) : {};
+      return {
+        endpoint: typeof cfg.endpoint === "string" ? cfg.endpoint : "",
+        token: typeof cfg.token === "string" ? cfg.token : "",
+        auto: cfg.auto !== false,
+        lastSyncAt: cfg.lastSyncAt || null,
+        lastError: cfg.lastError || null
+      };
+    } catch {
+      return { endpoint: "", token: "", auto: true, lastSyncAt: null, lastError: null };
+    }
+  }
+  function gravarConfigSync(parcial) {
+    const cfg = { ...obterConfigSync(), ...parcial };
+    localStorage.setItem(SYNC_CONFIG_KEY, JSON.stringify(cfg));
+    return cfg;
+  }
+  function syncConfigurado(cfg = obterConfigSync()) {
+    return !!(cfg.endpoint && cfg.token);
+  }
+  function normalizarEndpoint(url) {
+    return String(url || "").trim().replace(/\/+$/, "").replace(/\/api(\/inbox)?$/, "");
+  }
+  async function chamarApi(caminho, { method = "GET", body } = {}, cfg = obterConfigSync()) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_REDE_MS);
+    try {
+      const resp = await fetch(`${cfg.endpoint}${caminho}`, {
+        method,
+        headers: {
+          "Authorization": `Bearer ${cfg.token}`,
+          ...body !== void 0 ? { "Content-Type": "application/json" } : {}
+        },
+        body: body !== void 0 ? JSON.stringify(body) : void 0,
+        signal: controller.signal
+      });
+      const dados = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        const msg = resp.status === 401 ? "Token inv\xE1lido (401)" : dados.error || `HTTP ${resp.status}`;
+        throw new Error(msg);
+      }
+      return dados;
+    } catch (e) {
+      if (e.name === "AbortError") throw new Error("Tempo de conex\xE3o esgotado");
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  function reindexarColuna(coluna) {
+    appState.tasks.filter((t) => t.column === coluna).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).forEach((t, idx) => {
+      t.order = idx;
+    });
+  }
+  function aplicarCriacao(op) {
+    const p = op.payload || {};
+    const id = typeof p.taskId === "string" ? p.taskId : op.id;
+    if (appState.tasks.some((t) => t.id === id)) return { ok: true, duplicada: true };
+    const titulo = String(p.title || "").trim().slice(0, 300);
+    if (!titulo) return { ok: false, motivo: "sem t\xEDtulo" };
+    let projeto = typeof p.project === "string" && p.project.trim() ? p.project.trim().slice(0, 80) : null;
+    if (!projeto) projeto = appState.settings.projects[0] || "Geral";
+    let projetoNovo = false;
+    if (!appState.settings.projects.includes(projeto)) {
+      appState.settings.projects.push(projeto);
+      projetoNovo = true;
+    }
+    const curSprint = appState.sprints.find((s) => s.status === "current");
+    appState.tasks.forEach((t) => {
+      if (t.column === "backlog") t.order = (t.order ?? 0) + 1;
+    });
+    appState.tasks.unshift({
+      id,
+      title: titulo,
+      description: String(p.description || "").slice(0, 4e3),
+      priority: PRIORIDADES.includes(p.priority) ? p.priority : "media",
+      difficulty: DIFICULDADES.includes(p.difficulty) ? p.difficulty : "media",
+      column: "backlog",
+      order: 0,
+      project: projeto,
+      dueDate: /^\d{4}-\d{2}-\d{2}$/.test(p.dueDate || "") ? p.dueDate : "",
+      subtasks: [],
+      images: [],
+      parentId: null,
+      sprintId: curSprint ? curSprint.id : null,
+      createdAt: p.createdAt || op.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
+      source: op.source || "remoto"
+    });
+    return { ok: true, projetoNovo };
+  }
+  function aplicarMovimento(op) {
+    const p = op.payload || {};
+    const tarefa = appState.tasks.find((t) => t.id === p.taskId);
+    if (!tarefa) return { ok: false, motivo: "tarefa n\xE3o encontrada (arquivada ou exclu\xEDda?)" };
+    if (!COLUNAS.includes(p.column)) return { ok: false, motivo: `coluna inv\xE1lida "${p.column}"` };
+    const antiga = tarefa.column;
+    if (antiga === p.column) return { ok: true };
+    tarefa.column = p.column;
+    if (p.column === "progress" && !tarefa.startedAt) tarefa.startedAt = p.requestedAt || (/* @__PURE__ */ new Date()).toISOString();
+    if (p.column === "done") tarefa.completedAt = p.requestedAt || (/* @__PURE__ */ new Date()).toISOString();
+    else if (antiga === "done") delete tarefa.completedAt;
+    const maxOrdem = appState.tasks.filter((t) => t.column === p.column && t.id !== tarefa.id).reduce((m, t) => Math.max(m, t.order ?? 0), -1);
+    tarefa.order = maxOrdem + 1;
+    reindexarColuna(antiga);
+    reindexarColuna(p.column);
+    return { ok: true };
+  }
+  function montarSnapshot() {
+    const cur = appState.sprints.find((s) => s.status === "current");
+    return {
+      version: 1,
+      generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      projects: [...appState.settings.projects],
+      wipLimit: appState.settings.wipLimit,
+      currentSprint: cur ? { id: cur.id, name: cur.name, endDate: cur.endDate || null } : null,
+      tasks: appState.tasks.map((t) => ({
+        id: t.id,
+        title: t.title,
+        column: t.column,
+        priority: t.priority || "media",
+        difficulty: t.difficulty || "media",
+        project: t.project || "",
+        dueDate: t.dueDate || "",
+        parentId: t.parentId || null,
+        order: t.order ?? 0,
+        description: (t.description || "").slice(0, 500),
+        subtasks: {
+          done: (t.subtasks || []).filter((s) => s.done).length,
+          total: (t.subtasks || []).length
+        }
+      }))
+    };
+  }
+  async function publicarSnapshot() {
+    const cfg = obterConfigSync();
+    if (!syncConfigurado(cfg)) return false;
+    clearTimeout(timerSnapshot);
+    timerSnapshot = null;
+    await chamarApi("/api/snapshot", { method: "PUT", body: montarSnapshot() }, cfg);
+    return true;
+  }
+  function agendarPublicacaoSnapshot() {
+    if (aplicandoRemoto) return;
+    const cfg = obterConfigSync();
+    if (!syncConfigurado(cfg) || !cfg.auto) return;
+    clearTimeout(timerSnapshot);
+    timerSnapshot = setTimeout(() => {
+      publicarSnapshot().catch((e) => console.warn("Scrumban sync: falha ao publicar snapshot:", e.message));
+    }, DEBOUNCE_SNAPSHOT_MS);
+  }
+  async function sincronizarRemoto({ silencioso = false } = {}) {
+    const cfg = obterConfigSync();
+    if (!syncConfigurado(cfg)) {
+      if (!silencioso) mostrarToast("Configure o endpoint e o token do Acesso Remoto em Configura\xE7\xF5es.", "erro");
+      return;
+    }
+    if (sincronizando) return;
+    sincronizando = true;
+    ultimaTentativa = Date.now();
+    atualizarStatusSyncUI("Sincronizando\u2026");
+    try {
+      const { items = [] } = await chamarApi("/api/inbox", {}, cfg);
+      const aplicadas = [];
+      const falhas = [];
+      let criadas = 0;
+      let movidas = 0;
+      let projetosNovos = false;
+      aplicandoRemoto = true;
+      for (const op of items) {
+        let r;
+        if (op.type === "create") r = aplicarCriacao(op);
+        else if (op.type === "move") r = aplicarMovimento(op);
+        else r = { ok: false, motivo: `tipo desconhecido "${op.type}"` };
+        aplicadas.push(op.id);
+        if (r.ok) {
+          if (op.type === "create" && !r.duplicada) criadas++;
+          if (op.type === "move") movidas++;
+          if (r.projetoNovo) projetosNovos = true;
+        } else {
+          falhas.push(`${op.type}: ${r.motivo}`);
+        }
+      }
+      if (criadas || movidas) {
+        await saveState();
+      }
+      aplicandoRemoto = false;
+      if (aplicadas.length) {
+        await chamarApi("/api/inbox/ack", { method: "POST", body: { ids: aplicadas } }, cfg);
+      }
+      if (criadas || movidas) {
+        if (projetosNovos) atualizarFiltrosUI();
+        renderizarQuadro();
+        const partes = [];
+        if (criadas) partes.push(`${criadas} nova(s) tarefa(s)`);
+        if (movidas) partes.push(`${movidas} movimenta\xE7\xE3o(\xF5es)`);
+        mostrarToast(`\u{1F4E5} Remoto: ${partes.join(" e ")} importada(s).`, "sucesso", 5e3);
+      } else if (!silencioso) {
+        mostrarToast("Inbox remota vazia \u2014 tudo em dia.", "info", 2500);
+      }
+      if (falhas.length) {
+        console.warn("Scrumban sync: opera\xE7\xF5es ignoradas:", falhas);
+        mostrarToast(`${falhas.length} opera\xE7\xE3o(\xF5es) remota(s) ignorada(s): ${falhas[0]}`, "aviso", 6e3);
+      }
+      await publicarSnapshot();
+      gravarConfigSync({ lastSyncAt: (/* @__PURE__ */ new Date()).toISOString(), lastError: null });
+      atualizarStatusSyncUI();
+    } catch (e) {
+      aplicandoRemoto = false;
+      console.warn("Scrumban sync falhou:", e);
+      gravarConfigSync({ lastError: e.message || String(e) });
+      atualizarStatusSyncUI();
+      if (!silencioso) mostrarToast(`Falha na sincroniza\xE7\xE3o remota: ${e.message}`, "erro", 6e3);
+    } finally {
+      sincronizando = false;
+    }
+  }
+  function renderizarConfigSync() {
+    const cfg = obterConfigSync();
+    const elEndpoint = document.getElementById("configSyncEndpoint");
+    const elToken = document.getElementById("configSyncToken");
+    const elAuto = document.getElementById("configSyncAuto");
+    if (elEndpoint) elEndpoint.value = cfg.endpoint;
+    if (elToken) elToken.value = cfg.token;
+    if (elAuto) elAuto.checked = cfg.auto;
+    atualizarStatusSyncUI();
+  }
+  function salvarConfigSync() {
+    const endpoint = normalizarEndpoint(document.getElementById("configSyncEndpoint")?.value);
+    const token = (document.getElementById("configSyncToken")?.value || "").trim();
+    const auto = !!document.getElementById("configSyncAuto")?.checked;
+    if (endpoint && !/^https:\/\//i.test(endpoint) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(endpoint)) {
+      mostrarToast("Use uma URL HTTPS (HTTP s\xF3 \xE9 aceito para localhost).", "erro");
+      return;
+    }
+    gravarConfigSync({ endpoint, token, auto, lastError: null });
+    renderizarConfigSync();
+    mostrarToast(endpoint && token ? "Acesso remoto configurado." : "Acesso remoto desativado.", "sucesso");
+    if (endpoint && token) sincronizarRemoto({ silencioso: false });
+  }
+  function removerConfigSync() {
+    localStorage.removeItem(SYNC_CONFIG_KEY);
+    renderizarConfigSync();
+    mostrarToast("Configura\xE7\xE3o de acesso remoto removida deste dispositivo.", "info");
+  }
+  function atualizarStatusSyncUI(textoForcado) {
+    const el = document.getElementById("configSyncStatus");
+    if (!el) return;
+    const cfg = obterConfigSync();
+    let html;
+    if (textoForcado) html = escapeHTML(textoForcado);
+    else if (!syncConfigurado(cfg)) html = "N\xE3o configurado";
+    else if (cfg.lastError) html = `<span class="text-terracota">Erro: ${escapeHTML(cfg.lastError)}</span>`;
+    else if (cfg.lastSyncAt) html = `\xDAltima sincroniza\xE7\xE3o: ${escapeHTML(new Date(cfg.lastSyncAt).toLocaleString("pt-BR"))}`;
+    else html = "Configurado \u2014 ainda n\xE3o sincronizado";
+    el.innerHTML = html;
+  }
+  function inicializarSync() {
+    registrarObservadorSalvamento(agendarPublicacaoSnapshot);
+    const cfg = obterConfigSync();
+    if (syncConfigurado(cfg) && cfg.auto) {
+      sincronizarRemoto({ silencioso: true });
+    }
+    window.addEventListener("focus", () => {
+      const atual = obterConfigSync();
+      if (!syncConfigurado(atual) || !atual.auto) return;
+      if (Date.now() - ultimaTentativa < INTERVALO_MIN_FOCO_MS) return;
+      sincronizarRemoto({ silencioso: true });
+    });
+  }
+
   // js/config.js
   function renderizarAbaConfig() {
     const inputWip = document.getElementById("configWipLimit");
@@ -2751,6 +3057,7 @@ Esta a\xE7\xE3o n\xE3o poder\xE1 ser desfeita.`)) {
     }
     atualizarUIModoSubtasksVisibilidade();
     atualizarUIModoTema(obterPreferenciaTema(), ehTemaEscuroAtivo());
+    renderizarConfigSync();
   }
   function salvarConfigSubtasksVisibilidade(modo) {
     const novoModo = modo === "parent_only" ? "parent_only" : "all";
@@ -3159,6 +3466,15 @@ Esta a\xE7\xE3o n\xE3o poder\xE1 ser desfeita.`)) {
       }
     });
   }
+  function inicializarComportamentoDatas() {
+    document.addEventListener("pointerdown", (e) => {
+      const ativo = document.activeElement;
+      const ehCampoData = ativo && ativo.tagName === "INPUT" && ativo.type === "date";
+      if (ehCampoData && e.target !== ativo) {
+        ativo.blur();
+      }
+    }, true);
+  }
 
   // js/storage.js
   var STORAGE_KEY = "scrumban_pessoal_prod_store";
@@ -3289,6 +3605,10 @@ Esta a\xE7\xE3o n\xE3o poder\xE1 ser desfeita.`)) {
     }
     garantirOrdemTarefas();
   }
+  var observadoresSalvamento = /* @__PURE__ */ new Set();
+  function registrarObservadorSalvamento(fn) {
+    if (typeof fn === "function") observadoresSalvamento.add(fn);
+  }
   async function saveState() {
     try {
       if (idbConectado) {
@@ -3298,6 +3618,13 @@ Esta a\xE7\xE3o n\xE3o poder\xE1 ser desfeita.`)) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
       } catch (_) {
       }
+      observadoresSalvamento.forEach((fn) => {
+        try {
+          fn();
+        } catch (eObs) {
+          console.warn("Observador de salvamento falhou:", eObs);
+        }
+      });
     } catch (e) {
       console.error("Falha ao salvar dados:", e);
       mostrarToast("Erro ao salvar dados localmente. Verifique o espa\xE7o em disco do navegador.", "erro", 6e3);
@@ -3618,7 +3945,10 @@ Esta a\xE7\xE3o n\xE3o poder\xE1 ser desfeita.`)) {
     recolherColunaExpandida,
     toggleExpandirColuna,
     expandirColunaVizinha,
-    obterColunaExpandidaAtiva
+    obterColunaExpandidaAtiva,
+    sincronizarRemoto: () => sincronizarRemoto({ silencioso: false }),
+    salvarConfigSync,
+    removerConfigSync
   };
   Object.entries(globalBindings).forEach(([nome, fn]) => {
     window[nome] = fn;
@@ -3631,10 +3961,12 @@ Esta a\xE7\xE3o n\xE3o poder\xE1 ser desfeita.`)) {
     inicializarColunasDrop();
     inicializarEventosModais();
     inicializarAtalhosTeclado();
+    inicializarComportamentoDatas();
     atualizarFiltrosUI();
     inicializarFiltros();
     renderizarQuadro();
     verificarLembreteBackup();
+    inicializarSync();
   }
   window.bootstrapApp = bootstrapApp;
   if (document.readyState === "loading") {

@@ -1049,6 +1049,20 @@ html.dark .metric-hover-popover .bg-offwhite {
 /* Garante que títulos, textos de apoio, notas e rótulos sobre fundo claro tenham legibilidade alta */
 html:not(.dark) {
     --text-dark: #1E1B18;
+    /*
+     * Causa raiz do "fundo preto em <select>, checkboxes e calendário no Tauri/Linux":
+     * o <meta name="color-scheme" content="light dark"> no <head> deixa a engine
+     * (WebKitGTK no desktop, Chromium/WebKit no navegador) livre para desenhar os
+     * WIDGETS NATIVOS de formulário (caixa do <select>, seu menu, o popover do
+     * calendário de <input type="date">, checkboxes/radios sem estilo) seguindo a
+     * preferência de tema do SISTEMA OPERACIONAL, e não a classe .dark da página.
+     * Isso só aparecia no Tauri porque o WebKitGTK herda diretamente o tema GTK do
+     * SO; no navegador comum isso só reproduz se o SO do usuário também estiver
+     * no modo escuro. Declarar "color-scheme" explicitamente aqui (e no bloco
+     * html.dark abaixo) sobrepõe a meta tag e trava os widgets nativos no tema
+     * que o próprio Scrumban está usando.
+     */
+    color-scheme: light;
 }
 
 html:not(.dark) body {

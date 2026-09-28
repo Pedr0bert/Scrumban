@@ -144,7 +144,8 @@ import {
     abrirModalAtalhos,
     fecharModalAtalhos,
     inicializarEventosModais,
-    inicializarAtalhosTeclado
+    inicializarAtalhosTeclado,
+    inicializarComportamentoDatas
 } from './ui.js';
 
 import {
@@ -153,6 +154,13 @@ import {
     toggleMobileMenu,
     fecharMobileMenu
 } from './sidebar.js';
+
+import {
+    inicializarSync,
+    sincronizarRemoto,
+    salvarConfigSync,
+    removerConfigSync
+} from './sync.js';
 
 import {
     obterPreferenciaTema,
@@ -245,7 +253,10 @@ const globalBindings = {
     recolherColunaExpandida,
     toggleExpandirColuna,
     expandirColunaVizinha,
-    obterColunaExpandidaAtiva
+    obterColunaExpandidaAtiva,
+    sincronizarRemoto: () => sincronizarRemoto({ silencioso: false }),
+    salvarConfigSync,
+    removerConfigSync
 };
 
 Object.entries(globalBindings).forEach(([nome, fn]) => {
@@ -260,10 +271,12 @@ async function bootstrapApp() {
     inicializarColunasDrop();
     inicializarEventosModais();
     inicializarAtalhosTeclado();
+    inicializarComportamentoDatas();
     atualizarFiltrosUI();
     inicializarFiltros();
     renderizarQuadro();
     verificarLembreteBackup();
+    inicializarSync();
 }
 
 window.bootstrapApp = bootstrapApp;

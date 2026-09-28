@@ -1,6 +1,6 @@
 # Planejamento Técnico: Captura Remota de Tarefas via Telegram Bot & Inbox Desacoplada
 
-> **Status:** 📋 Planejado para Implementação Futura  
+> **Status:** ✅ Etapas 1–3 implementadas em `telegram-bot/` e `js/sync.js` (ver `telegram-bot/README.md`). Etapa 5 (servidor local) segue pendente.  
 > **Data de Planejamento:** 15 de Setembro de 2026  
 > **Objetivo:** Permitir adicionar tarefas ao SCRUMBAN rapidamente pelo smartphone (via Telegram) sem precisar ligar o PC ou acessar a interface desktop no momento da captura.
 

@@ -166,11 +166,15 @@ npm run tauri:build
 
 ---
 
+## 📱 Acesso Remoto via Telegram
+
+Bot do Telegram (Cloudflare Worker + D1, plano gratuito) para capturar tarefas com `#projeto !alta ~dificil @amanha`, consultar o quadro (`/quadro`, `/foco`, `/atrasadas`) e mover cards (`/mover`, `/feito`) pelo celular. O desktop importa as operações ao abrir/focar a janela e publica um snapshot do quadro.
+
+- Setup: [`telegram-bot/README.md`](telegram-bot/README.md) · Configuração no app: **Configurações → Acesso Remoto (Telegram)**.
+
 ## 🔮 Próximas Fases Planejadas
 
-- **Captura Remota de Tarefas via Telegram Bot:**
-  - Permite adicionar tarefas instantaneamente ao Backlog pelo celular via chatbot no Telegram usando mensagens rápidas com `#projeto`, `!alta` e `@prazo`, com sincronização automática quando o computador for aberto.
-  - Veja o plano completo em: [`PLANO_CAPTURA_REMOTA_TELEGRAM.md`](PLANO_CAPTURA_REMOTA_TELEGRAM.md).
+- **App Mobile (Flutter ou Tauri Mobile):** avaliação do código, comparação e arquitetura proposta em [`PLANO_MOBILE_FLUTTER_E_BOT.md`](PLANO_MOBILE_FLUTTER_E_BOT.md).
 
 ---
 
