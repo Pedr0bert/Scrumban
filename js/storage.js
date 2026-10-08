@@ -3,8 +3,9 @@
  * Modulo ES: IndexedDB, contingência localStorage, validação de schema e backups.
  */
 
-import { DEFAULT_STATE, appState, setAppState, COLUNAS, garantirOrdemTarefas } from './state.js';
+import { DEFAULT_STATE, appState, setAppState, COLUNAS, garantirOrdemTarefas, hojeISOLocal } from './state.js';
 import { mostrarToast } from './ui.js';
+import { salvarArquivo, configurarGeradorBackup, agendarBackupAutomatico } from './desktop.js';
 
 export const STORAGE_KEY = 'scrumban_pessoal_prod_store';
 export const IDB_NAME = 'scrumban_pessoal_db';
@@ -14,9 +15,13 @@ export const IDB_STORE_IMAGES = 'task_images';
 
 export let idbConectado = false;
 
-// Helpers de IndexedDB baseados em Promises nativas
+// Helpers de IndexedDB baseados em Promises nativas.
+// A conexão é aberta uma única vez e reutilizada (antes cada get/set abria uma nova).
+let conexaoIDB = null;
+
 export function abrirIndexedDB() {
-    return new Promise((resolve, reject) => {
+    if (conexaoIDB) return conexaoIDB;
+    conexaoIDB = new Promise((resolve, reject) => {
         if (!('indexedDB' in window)) {
             return reject(new Error('IndexedDB não suportado neste ambiente'));
         }
@@ -30,9 +35,18 @@ export function abrirIndexedDB() {
                 db.createObjectStore(IDB_STORE_IMAGES);
             }
         };
-        request.onsuccess = () => resolve(request.result);
+        request.onsuccess = () => {
+            const db = request.result;
+            db.onversionchange = () => { db.close(); conexaoIDB = null; };
+            db.onclose = () => { conexaoIDB = null; };
+            resolve(db);
+        };
         request.onerror = () => reject(request.error);
+    }).catch(err => {
+        conexaoIDB = null;
+        throw err;
     });
+    return conexaoIDB;
 }
 
 export async function idbGet(key, storeName = IDB_STORE) {
@@ -164,6 +178,7 @@ export async function saveState() {
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
         } catch (_) {}
+        agendarBackupAutomatico();
         observadoresSalvamento.forEach(fn => {
             try { fn(); } catch (eObs) { console.warn('Observador de salvamento falhou:', eObs); }
         });
@@ -308,23 +323,85 @@ export function validarSchemaBackup(data) {
     return { valido: true };
 }
 
-export function exportarBackupJSON() {
+/**
+ * Monta o backup completo: estado + imagens anexadas (que ficam em outro store do
+ * IndexedDB e antes não eram exportadas, deixando referências órfãs ao restaurar).
+ */
+export async function montarBackupCompleto() {
+    const imagesData = {};
+    const ids = new Set();
+    (appState.tasks || []).forEach(t => (t.images || []).forEach(img => img && img.id && ids.add(img.id)));
+    for (const id of ids) {
+        const dataUrl = await obterImagemIndexedDB(id);
+        if (dataUrl) imagesData[id] = dataUrl;
+    }
+    return { ...appState, imagesData, exportedAt: new Date().toISOString() };
+}
+
+configurarGeradorBackup(montarBackupCompleto);
+
+export async function exportarBackupJSON() {
     try {
+        const anterior = appState.settings.lastBackupDate;
         appState.settings.lastBackupDate = new Date().toISOString();
-        saveState();
+        const backup = await montarBackupCompleto();
+
+        const r = await salvarArquivo({
+            nome: `scrumban_backup_${hojeISOLocal()}.json`,
+            conteudo: JSON.stringify(backup, null, 2),
+            mime: 'application/json',
+            filtroNome: 'Backup do Scrumban (JSON)',
+            extensoes: ['json']
+        });
+
+        if (r.status === 'cancelado') {
+            appState.settings.lastBackupDate = anterior;
+            return;
+        }
+        await saveState();
         verificarLembreteBackup();
-
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appState, null, 2));
-        const dlAnchorElem = document.createElement('a');
-        dlAnchorElem.setAttribute("href", dataStr);
-        dlAnchorElem.setAttribute("download", `scrumban_backup_${new Date().toISOString().slice(0, 10)}.json`);
-        dlAnchorElem.click();
-
-        mostrarToast('Backup exportado com sucesso! Arquivo JSON baixado.', 'sucesso');
+        const totalImagens = Object.keys(backup.imagesData).length;
+        const sufixo = totalImagens ? ` (inclui ${totalImagens} imagem${totalImagens > 1 ? 'ns' : ''})` : '';
+        mostrarToast(r.status === 'salvo' ? `Backup salvo em ${r.caminho}${sufixo}` : `Backup exportado com sucesso!${sufixo}`, 'sucesso', 6000);
     } catch (err) {
         console.error('Erro ao exportar backup:', err);
-        mostrarToast('Erro ao gerar arquivo de backup: ' + err.message, 'erro');
+        mostrarToast('Erro ao gerar arquivo de backup: ' + (err.message || err), 'erro');
     }
+}
+
+/** Valida e aplica um backup já parseado (arquivo JSON importado ou backup automático do desktop). */
+export async function aplicarBackup(imported) {
+    const validacao = validarSchemaBackup(imported);
+    if (!validacao.valido) {
+        mostrarToast(`Falha na validação do backup: ${validacao.erro}`, 'erro', 6500);
+        return false;
+    }
+
+    let imagensRestauradas = 0;
+    if (imported.imagesData && typeof imported.imagesData === 'object') {
+        for (const [id, dataUrl] of Object.entries(imported.imagesData)) {
+            if (typeof dataUrl === 'string' && dataUrl.startsWith('data:image/')) {
+                try {
+                    await salvarImagemIndexedDB(id, dataUrl);
+                    imagensRestauradas++;
+                } catch (_) {}
+            }
+        }
+    }
+
+    setAppState({
+        settings: { ...DEFAULT_STATE.settings, ...imported.settings },
+        sprints: imported.sprints,
+        tasks: imported.tasks,
+        history: imported.history
+    });
+    garantirOrdemTarefas();
+    await saveState();
+
+    const sufixo = imagensRestauradas ? ` ${imagensRestauradas} imagem(ns) restaurada(s).` : '';
+    mostrarToast(`Backup restaurado com sucesso!${sufixo}`, 'sucesso');
+    verificarLembreteBackup();
+    return true;
 }
 
 export function importarBackupJSON(event, onSucessoCallback) {
@@ -334,33 +411,12 @@ export function importarBackupJSON(event, onSucessoCallback) {
     const reader = new FileReader();
     reader.onload = async function(e) {
         try {
-            const imported = JSON.parse(e.target.result);
-            const validacao = validarSchemaBackup(imported);
-            if (!validacao.valido) {
-                mostrarToast(`Falha na validação do backup: ${validacao.erro}`, 'erro', 6500);
-                event.target.value = '';
-                return;
-            }
-
-            setAppState({
-                settings: { ...DEFAULT_STATE.settings, ...imported.settings },
-                sprints: imported.sprints,
-                tasks: imported.tasks,
-                history: imported.history
-            });
-            garantirOrdemTarefas();
-
-            await saveState();
-            mostrarToast('Backup restaurado com sucesso! Dados sincronizados no IndexedDB.', 'sucesso');
-            event.target.value = '';
-
-            if (typeof onSucessoCallback === 'function') {
-                onSucessoCallback();
-            }
-            verificarLembreteBackup();
+            const ok = await aplicarBackup(JSON.parse(e.target.result));
+            if (ok && typeof onSucessoCallback === 'function') onSucessoCallback();
         } catch (err) {
             console.error('Erro ao importar backup:', err);
             mostrarToast('Erro ao ler arquivo JSON: ' + err.message, 'erro', 6000);
+        } finally {
             event.target.value = '';
         }
     };
@@ -427,6 +483,17 @@ export async function executarLimpezaTotalDados() {
     try {
         setAppState(JSON.parse(JSON.stringify(DEFAULT_STATE)));
         await saveState();
+        try {
+            const db = await abrirIndexedDB();
+            await new Promise((resolve, reject) => {
+                const tx = db.transaction(IDB_STORE_IMAGES, 'readwrite');
+                tx.objectStore(IDB_STORE_IMAGES).clear();
+                tx.oncomplete = resolve;
+                tx.onerror = () => reject(tx.error);
+            });
+        } catch (eImg) {
+            console.warn('Não foi possível limpar as imagens:', eImg);
+        }
 
         try {
             sessionStorage.removeItem('scrumban_dismiss_backup_reminder');

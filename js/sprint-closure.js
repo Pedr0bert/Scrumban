@@ -5,7 +5,7 @@
 
 import { appState, gerarId, formatarData, escapeHTML, PRIORIDADE_CONFIG, DIFICULDADE_CONFIG } from './state.js';
 import { saveState } from './storage.js';
-import { mostrarToast, mudarAba } from './ui.js';
+import { mostrarToast, mudarAba, confirmarAcao } from './ui.js';
 import { renderizarQuadro } from './kanban.js';
 import { renderizarPainelMetricasFluxo, copiarMarkdownSprint, baixarCsvSprint } from './metrics.js';
 
@@ -140,16 +140,19 @@ export function salvarNotasSprintHistorico() {
     mostrarToast('Notas da sprint salvas com sucesso!', 'sucesso');
 }
 
-export function reabrirSprintHistorico(histId) {
+export async function reabrirSprintHistorico(histId) {
     const hist = (appState.history || []).find(h => h.id === histId);
     if (!hist) {
         mostrarToast('Sprint não encontrada no histórico.', 'erro');
         return;
     }
 
-    if (!confirm(`Deseja reabrir a sprint "${hist.sprintName}"?\n\nEla voltará a ser a Sprint Atual no Quadro e suas tarefas concluídas serão restauradas.`)) {
-        return;
-    }
+    const ok = await confirmarAcao({
+        titulo: `Reabrir a sprint "${hist.sprintName}"?`,
+        mensagem: 'Ela volta a ser a Sprint Atual no Quadro e as tarefas entregues retornam para Done.',
+        textoConfirmar: 'Reabrir sprint'
+    });
+    if (!ok) return;
 
     // Se houver uma sprint atual ativa, transforma-a em futura
     appState.sprints.forEach(s => {
@@ -211,16 +214,20 @@ export function reabrirSprintHistorico(histId) {
     mostrarToast(`Sprint "${hist.sprintName}" reaberta com sucesso no Quadro!`, 'sucesso');
 }
 
-export function excluirSprintHistorico(histId) {
+export async function excluirSprintHistorico(histId) {
     const hist = (appState.history || []).find(h => h.id === histId);
     if (!hist) {
         mostrarToast('Sprint não encontrada no histórico.', 'erro');
         return;
     }
 
-    if (!confirm(`Tem certeza que deseja excluir permanentemente o registro da sprint "${hist.sprintName}" do histórico?\n\nEsta ação não poderá ser desfeita.`)) {
-        return;
-    }
+    const ok = await confirmarAcao({
+        titulo: `Excluir "${hist.sprintName}" do histórico?`,
+        mensagem: 'O registro e a lista de entregas desta sprint serão apagados permanentemente.',
+        textoConfirmar: 'Excluir registro',
+        perigo: true
+    });
+    if (!ok) return;
 
     appState.history = appState.history.filter(h => h.id !== histId);
     saveState();

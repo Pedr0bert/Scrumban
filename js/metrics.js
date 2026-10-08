@@ -5,6 +5,7 @@
 
 import { appState, formatarData, escapeHTML, DIFICULDADE_CONFIG } from './state.js';
 import { mostrarToast } from './ui.js';
+import { salvarArquivo } from './desktop.js';
 
 export function calcularMetricasFluxo() {
     const agora = Date.now();
@@ -490,7 +491,7 @@ export async function copiarMarkdownSprint(histId) {
     }
 }
 
-export function baixarCsvSprint(histId) {
+export async function baixarCsvSprint(histId) {
     const hist = (appState.history || []).find(h => h.id === histId);
     if (!hist) {
         mostrarToast('Sprint não encontrada no histórico.', 'erro');
@@ -535,15 +536,19 @@ export function baixarCsvSprint(histId) {
     });
 
     const conteudoCsv = '\uFEFF' + linhas.join('\r\n');
-    const blob = new Blob([conteudoCsv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
     const slug = (hist.sprintName || 'sprint').toLowerCase().replace(/[^a-z0-9_-]/gi, '_');
-    link.href = url;
-    link.download = `entregas-${slug}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    mostrarToast(`CSV da sprint "${hist.sprintName}" baixado com sucesso!`, 'sucesso');
+    try {
+        const r = await salvarArquivo({
+            nome: `entregas-${slug}.csv`,
+            conteudo: conteudoCsv,
+            mime: 'text/csv;charset=utf-8',
+            filtroNome: 'Planilha CSV',
+            extensoes: ['csv']
+        });
+        if (r.status === 'cancelado') return;
+        mostrarToast(r.status === 'salvo' ? `CSV salvo em ${r.caminho}` : `CSV da sprint "${hist.sprintName}" baixado com sucesso!`, 'sucesso', 5000);
+    } catch (err) {
+        console.error('Erro ao salvar CSV:', err);
+        mostrarToast('Não foi possível salvar o CSV: ' + (err.message || err), 'erro');
+    }
 }
