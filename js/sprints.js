@@ -5,7 +5,7 @@
 
 import { appState, gerarId, formatarData, formatarDataCurta, escapeHTML, hojeISOLocal } from './state.js';
 import { saveState } from './storage.js';
-import { mostrarToast } from './ui.js';
+import { mostrarToast, confirmarAcao } from './ui.js';
 import { renderizarQuadro } from './kanban.js';
 
 /**
@@ -154,9 +154,6 @@ export function renderizarHeaderSprints() {
             if (progresso.totalChecklist > 0) tooltipProgresso += ` • ${progresso.checklistDone}/${progresso.totalChecklist} itens de checklist`;
             if (progresso.totalFilhas > 0) tooltipProgresso += ` • ${progresso.filhasDone}/${progresso.totalFilhas} sub-tarefas filhas`;
             if (sprintVencida) tooltipProgresso += ` • Prazo da sprint vencido há ${diasAtraso} dia(s)`;
-
-            elCur.classList.toggle('border-terracota', sprintVencida);
-            elCur.classList.toggle('animate-pulse', false);
 
             elCur.innerHTML = `
                 <div class="min-w-0 flex-1">
@@ -406,16 +403,20 @@ export function salvarEdicaoSprintForm(e) {
     mostrarToast(`Sprint "${nome}" atualizada com sucesso!`, 'sucesso');
 }
 
-export function excluirSprintAtual() {
+export async function excluirSprintAtual() {
     const cur = appState.sprints.find(s => s.status === 'current');
     if (!cur) {
         mostrarToast('Nenhuma sprint ativa no momento.', 'info');
         return;
     }
 
-    if (!confirm(`Tem certeza que deseja excluir a Sprint Atual "${cur.name}"?\n\nAs tarefas cadastradas no quadro serão mantidas, mas o ciclo atual será cancelado.`)) {
-        return;
-    }
+    const ok = await confirmarAcao({
+        titulo: `Excluir a sprint "${cur.name}"?`,
+        mensagem: 'As tarefas do quadro serão mantidas, mas o ciclo atual será cancelado.',
+        textoConfirmar: 'Excluir sprint',
+        perigo: true
+    });
+    if (!ok) return;
 
     const nomeExcluido = cur.name;
     const sprintId = cur.id;
@@ -473,8 +474,14 @@ export function salvarNovaSprintForm(e) {
     mostrarToast(`Sprint "${nome}" adicionada com sucesso como ${novaSprint.status === 'current' ? 'Atual' : 'Futura'}!`, 'sucesso');
 }
 
-export function ativarSprintFutura(sprintId) {
-    if (!confirm('Deseja definir esta Sprint como a Sprint Atual?')) return;
+export async function ativarSprintFutura(sprintId) {
+    const alvo = appState.sprints.find(s => s.id === sprintId);
+    const ok = await confirmarAcao({
+        titulo: `Tornar "${alvo ? alvo.name : 'esta sprint'}" a Sprint Atual?`,
+        mensagem: 'Se houver uma sprint atual, ela volta para a fila de próximas sprints.',
+        textoConfirmar: 'Tornar atual'
+    });
+    if (!ok) return;
 
     appState.sprints.forEach(s => {
         if (s.id === sprintId) s.status = 'current';
@@ -487,8 +494,14 @@ export function ativarSprintFutura(sprintId) {
     mostrarToast('Sprint ativada como atual no Quadro!', 'sucesso');
 }
 
-export function excluirSprintFutura(sprintId) {
-    if (!confirm('Deseja remover esta Sprint planejada?')) return;
+export async function excluirSprintFutura(sprintId) {
+    const alvo = appState.sprints.find(s => s.id === sprintId);
+    const ok = await confirmarAcao({
+        titulo: `Remover "${alvo ? alvo.name : 'esta sprint'}" do planejamento?`,
+        textoConfirmar: 'Remover',
+        perigo: true
+    });
+    if (!ok) return;
     appState.sprints = appState.sprints.filter(s => s.id !== sprintId);
     saveState();
     renderizarAbaSprints();

@@ -5,7 +5,7 @@
 
 import { appState, gerarId, escapeHTML, tarefaCorrespondeFiltros, obterDescendentesIds } from './state.js';
 import { saveState, verificarLembreteBackup, salvarImagemIndexedDB, obterImagemIndexedDB, excluirImagemIndexedDB } from './storage.js';
-import { mostrarToast, executarExclusaoComUndo, atualizarFiltrosUI } from './ui.js';
+import { mostrarToast, executarExclusaoComUndo, atualizarFiltrosUI, pedirTexto } from './ui.js';
 import { criarElementoCard, moverCardNoDOM, verificarPlaceholderColuna, atualizarContadoresColunas, atualizarWipBadge, atualizarOverdueBadge, atualizarConteudoCard } from './kanban.js';
 import { renderizarHeaderSprints } from './sprints.js';
 
@@ -85,7 +85,7 @@ export function fecharModalTarefa() {
     imagensTemporarias = [];
 }
 
-export function salvarTarefaForm() {
+export async function salvarTarefaForm() {
     const titulo = document.getElementById('inputTitulo').value.trim();
     if (!titulo) {
         mostrarToast('Por favor, informe o título da tarefa.', 'erro');
@@ -95,7 +95,12 @@ export function salvarTarefaForm() {
 
     let projeto = document.getElementById('inputProjeto').value;
     if (projeto === '__novo__') {
-        const novo = prompt('Nome do novo projeto ou categoria:');
+        const novo = await pedirTexto({
+            titulo: 'Novo projeto',
+            rotulo: 'Nome do projeto ou categoria',
+            placeholder: 'Ex: Cliente Acme',
+            textoConfirmar: 'Criar projeto'
+        });
         if (novo && novo.trim()) {
             projeto = novo.trim();
             if (!appState.settings.projects.includes(projeto)) {

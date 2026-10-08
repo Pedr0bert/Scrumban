@@ -14,6 +14,7 @@ import { fecharModalDetalhes } from './task-details.js';
 import { fecharModalTarefa } from './task-edit.js';
 import { toggleBarraLateral, fecharMobileMenu } from './sidebar.js';
 import { toggleTemaDark } from './theme.js';
+import { inicializarSeletorDatas } from './datepicker.js';
 
 let tarefaExcluidaPendente = null;
 let timerUndoExclusao = null;
@@ -364,23 +365,88 @@ export function inicializarAtalhosTeclado() {
     });
 }
 
-// ================= COMPORTAMENTO DE CAMPOS DE DATA (CALENDÁRIO NATIVO) =================
+// ================= CAMPOS DE DATA =================
 
 /**
- * No app Desktop (Tauri/WebKitGTK no Linux), o calendário nativo do
- * <input type="date"> é um popover do GTK renderizado por fora do DOM.
- * Cliques fora do campo não chegam a esse popover como um "clique externo"
- * (só o Esc, que aciona blur(), fecha — ver inicializarAtalhosTeclado acima).
- * Para restaurar o fluxo esperado, forçamos blur() no campo de data sempre
- * que o usuário clica em qualquer outro elemento da página, o que fecha o
- * calendário sem interferir no clique nesse outro elemento.
+ * O calendário nativo foi substituído por um seletor próprio (js/datepicker.js),
+ * que fecha ao clicar fora — o popover GTK do WebKit no Linux só fechava com Esc.
  */
 export function inicializarComportamentoDatas() {
-    document.addEventListener('pointerdown', (e) => {
-        const ativo = document.activeElement;
-        const ehCampoData = ativo && ativo.tagName === 'INPUT' && ativo.type === 'date';
-        if (ehCampoData && e.target !== ativo) {
-            ativo.blur();
-        }
-    }, true);
+    inicializarSeletorDatas();
+}
+
+// ================= DIÁLOGOS DO APP (substituem confirm()/prompt() nativos) =================
+
+/**
+ * Abre o modal genérico de confirmação/entrada de texto.
+ * @returns {Promise<boolean|string|null>}
+ */
+function abrirDialogoApp({ titulo, mensagem, textoConfirmar = 'Confirmar', perigo = false, entrada = null }) {
+    const modal = document.getElementById('modalDialogoApp');
+    if (!modal) {
+        // Fallback defensivo se o HTML não tiver o modal
+        return Promise.resolve(entrada ? window.prompt(mensagem || titulo) : window.confirm(`${titulo}\n\n${mensagem || ''}`));
+    }
+
+    const elTitulo = document.getElementById('dialogo-app-titulo');
+    const elMsg = document.getElementById('dialogo-app-mensagem');
+    const elCampoWrap = document.getElementById('dialogo-app-campo-wrap');
+    const elCampo = document.getElementById('dialogo-app-campo');
+    const elRotulo = document.getElementById('dialogo-app-rotulo');
+    const btnOk = document.getElementById('dialogo-app-ok');
+    const btnCancelar = document.getElementById('dialogo-app-cancelar');
+
+    elTitulo.textContent = titulo;
+    elMsg.textContent = mensagem || '';
+    elMsg.classList.toggle('hidden', !mensagem);
+    btnOk.textContent = textoConfirmar;
+    btnOk.className = `${perigo ? 'bg-terracota' : 'bg-dark'} hover:bg-opacity-90 text-white px-5 py-2 rounded-sm font-serif text-sm shadow-xs`;
+
+    elCampoWrap.classList.toggle('hidden', !entrada);
+    if (entrada) {
+        elRotulo.textContent = entrada.rotulo || '';
+        elCampo.placeholder = entrada.placeholder || '';
+        elCampo.value = entrada.valor || '';
+    }
+
+    return new Promise(resolve => {
+        let resultado = entrada ? null : false;
+        const confirmar = () => {
+            if (entrada) {
+                const v = elCampo.value.trim();
+                if (!v) { elCampo.focus(); return; }
+                resultado = v;
+            } else {
+                resultado = true;
+            }
+            modal.close();
+        };
+        const aoTeclar = (e) => {
+            if (e.key === 'Enter' && entrada) { e.preventDefault(); confirmar(); }
+        };
+        const aoFechar = () => {
+            btnOk.removeEventListener('click', confirmar);
+            btnCancelar.removeEventListener('click', cancelar);
+            elCampo.removeEventListener('keydown', aoTeclar);
+            modal.removeEventListener('close', aoFechar);
+            resolve(resultado);
+        };
+        const cancelar = () => modal.close();
+
+        btnOk.addEventListener('click', confirmar);
+        btnCancelar.addEventListener('click', cancelar);
+        elCampo.addEventListener('keydown', aoTeclar);
+        modal.addEventListener('close', aoFechar);
+
+        modal.showModal();
+        (entrada ? elCampo : btnOk).focus();
+    });
+}
+
+export function confirmarAcao({ titulo, mensagem = '', textoConfirmar = 'Confirmar', perigo = false }) {
+    return abrirDialogoApp({ titulo, mensagem, textoConfirmar, perigo });
+}
+
+export function pedirTexto({ titulo, rotulo = '', placeholder = '', valor = '', textoConfirmar = 'Salvar' }) {
+    return abrirDialogoApp({ titulo, textoConfirmar, entrada: { rotulo, placeholder, valor } });
 }
