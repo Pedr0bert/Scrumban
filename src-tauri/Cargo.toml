@@ -1,6 +1,6 @@
 [package]
 name = "scrumban"
-version = "4.1.0"
+version = "2.0.0"
 description = "Scrumban Pessoal — quadro Scrumban offline-first para desenvolvedores solo"
 authors = ["Pedr0bert"]
 license = "GPL-3.0"

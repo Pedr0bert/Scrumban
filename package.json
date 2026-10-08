@@ -1,6 +1,6 @@
 {
   "name": "scrumban-pessoal",
-  "version": "4.1.0",
+  "version": "2.0.0",
   "private": true,
   "description": "Scrumban Pessoal para Desenvolvedores Solo — Offline-First & Dark Mode",
   "scripts": {

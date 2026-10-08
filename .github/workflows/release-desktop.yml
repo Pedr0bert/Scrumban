@@ -2,7 +2,7 @@ name: Release Desktop
 
 # Gera instaladores para Linux (.deb, .rpm, .AppImage) e Windows (.exe, .msi) e anexa ao Release.
 # Dispare criando uma tag de versão:
-#   git tag v4.1.0 && git push origin v4.1.0
+#   git tag v2.0.0 && git push origin v2.0.0
 on:
   push:
     tags: ['v*']
