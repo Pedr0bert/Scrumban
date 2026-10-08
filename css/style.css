@@ -1242,6 +1242,57 @@ html.dark #modalVisualizarImagem h3 {
     border-radius: 3px;
     color: var(--text-dark);
 }
-.seletor-data-nav:hover { background-color: var(--border-beige); }
 .seletor-data-acao { color: var(--accent-terracota); font-weight: 600; padding: 2px 6px; border-radius: 3px; }
 .seletor-data-acao:hover { background-color: rgba(189, 107, 88, 0.12); }
+
+/* ================= BARRA DE TÍTULO DESKTOP (TAURI FRAMELESS) ================= */
+html.is-desktop #desktop-titlebar {
+    display: flex !important;
+}
+
+#desktop-titlebar {
+    height: 30px;
+    user-select: none;
+    -webkit-user-select: none;
+    background-color: #FFFFFF;
+    border-bottom: 1px solid var(--border-beige);
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+#desktop-titlebar [data-tauri-drag-region] {
+    -webkit-app-region: drag;
+}
+
+#desktop-titlebar button {
+    -webkit-app-region: no-drag;
+}
+
+/* Modo escuro na barra de título desktop */
+html.dark #desktop-titlebar {
+    background-color: #1F2023;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+html.dark #desktop-titlebar span {
+    color: #E5E3DE;
+}
+
+html.dark #desktop-titlebar button {
+    color: #A09E99;
+}
+
+html.dark #desktop-titlebar button:hover:not(#btn-desktop-fechar) {
+    background-color: rgba(255, 255, 255, 0.08);
+    color: #FFFFFF;
+}
+
+/* Borda sutil na janela desktop quando desmaximizada */
+html.is-desktop:not(.janela-maximizada) body {
+    border: 1px solid var(--border-beige);
+    box-sizing: border-box;
+}
+
+html.dark.is-desktop:not(.janela-maximizada) body {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-sizing: border-box;
+}

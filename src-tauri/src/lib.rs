@@ -67,6 +67,38 @@ fn aplicar_tema_nativo(window: tauri::WebviewWindow, escuro: bool) -> Result<(),
     window.set_theme(Some(tema)).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn minimizar_janela(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.minimize().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn alternar_maximizar(window: tauri::WebviewWindow) -> Result<bool, String> {
+    let maximizada = window.is_maximized().map_err(|e| e.to_string())?;
+    if maximizada {
+        window.unmaximize().map_err(|e| e.to_string())?;
+        Ok(false)
+    } else {
+        window.maximize().map_err(|e| e.to_string())?;
+        Ok(true)
+    }
+}
+
+#[tauri::command]
+fn fechar_janela(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.close().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn arrastar_janela(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.start_dragging().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn janela_maximizada(window: tauri::WebviewWindow) -> Result<bool, String> {
+    window.is_maximized().map_err(|e| e.to_string())
+}
+
 fn mostrar_e_focar(app: &tauri::AppHandle) {
     if let Some(janela) = app.get_webview_window(JANELA_PRINCIPAL) {
         let _ = janela.unminimize();
@@ -102,6 +134,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             salvar_arquivo,
             aplicar_tema_nativo,
+            minimizar_janela,
+            alternar_maximizar,
+            fechar_janela,
+            arrastar_janela,
+            janela_maximizada,
             backups::backup_automatico,
             backups::listar_backups,
             backups::ler_backup,
@@ -128,6 +165,7 @@ pub fn run() {
                 .min_inner_size(960.0, 620.0)
                 .center()
                 .visible(false)
+                .decorations(false)
                 .theme(Some(if sistema_escuro { tauri::Theme::Dark } else { tauri::Theme::Light }))
                 .zoom_hotkeys_enabled(true)
                 // O handler nativo de arquivos arrastados conflita com o drag-and-drop HTML5 dos cards

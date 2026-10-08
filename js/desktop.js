@@ -56,6 +56,57 @@ export async function mostrarJanela() {
     }
 }
 
+export async function minimizarJanela() {
+    if (!ehDesktop()) return;
+    try {
+        await invocar('minimizar_janela');
+    } catch (e) {
+        console.warn('Erro ao minimizar janela:', e);
+    }
+}
+
+export async function alternarMaximizar() {
+    if (!ehDesktop()) return;
+    try {
+        const maximizada = await invocar('alternar_maximizar');
+        atualizarIconeMaximizar(maximizada);
+    } catch (e) {
+        console.warn('Erro ao alternar maximizar:', e);
+    }
+}
+
+export async function fecharJanela() {
+    if (!ehDesktop()) return;
+    try {
+        await invocar('fechar_janela');
+    } catch (e) {
+        console.warn('Erro ao fechar janela:', e);
+    }
+}
+
+export async function arrastarJanela() {
+    if (!ehDesktop()) return;
+    try {
+        await invocar('arrastar_janela');
+    } catch (_) {}
+}
+
+export function atualizarIconeMaximizar(maximizada) {
+    const icon = document.getElementById('icon-desktop-maximizar');
+    if (!icon) return;
+    if (maximizada) {
+        document.documentElement.classList.add('janela-maximizada');
+        icon.innerHTML = '<rect x="6" y="3" width="15" height="15" rx="1.5" ry="1.5"></rect><polyline points="3 7 3 21 17 21"></polyline>';
+        const btn = document.getElementById('btn-desktop-maximizar');
+        if (btn) btn.title = 'Restaurar tamanho';
+    } else {
+        document.documentElement.classList.remove('janela-maximizada');
+        icon.innerHTML = '<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>';
+        const btn = document.getElementById('btn-desktop-maximizar');
+        if (btn) btn.title = 'Maximizar';
+    }
+}
+
 async function alternarTelaCheia() {
     const janela = janelaAtual();
     if (!janela) return;
@@ -205,6 +256,36 @@ export function inicializarDesktop({ aoRestaurarBackup } = {}) {
         const temSelecao = String(window.getSelection && window.getSelection()).length > 0;
         if (!editavel && !temSelecao) e.preventDefault();
     });
+
+    // Controles da barra de título personalizada
+    const titlebar = document.getElementById('desktop-titlebar');
+    if (titlebar) {
+        titlebar.addEventListener('mousedown', (e) => {
+            if (e.button === 0 && !e.target.closest('button')) {
+                arrastarJanela();
+            }
+        });
+        titlebar.addEventListener('dblclick', (e) => {
+            if (!e.target.closest('button')) {
+                alternarMaximizar();
+            }
+        });
+    }
+
+    document.getElementById('btn-desktop-minimizar')?.addEventListener('click', minimizarJanela);
+    document.getElementById('btn-desktop-maximizar')?.addEventListener('click', alternarMaximizar);
+    document.getElementById('btn-desktop-fechar')?.addEventListener('click', fecharJanela);
+
+    window.addEventListener('resize', async () => {
+        if (!ehDesktop()) return;
+        try {
+            const max = await invocar('janela_maximizada');
+            atualizarIconeMaximizar(max);
+        } catch (_) {}
+    });
+
+    // Checar estado inicial de maximização
+    invocar('janela_maximizada').then(atualizarIconeMaximizar).catch(() => {});
 
     document.getElementById('config-desktop-backups')?.addEventListener('click', (e) => {
         const btn = e.target.closest('.btn-restaurar-backup');
