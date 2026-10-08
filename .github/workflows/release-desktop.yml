@@ -1,7 +1,8 @@
-name: Release Desktop (Linux)
+name: Release Desktop
 
-# Gera .deb, .rpm e .AppImage e anexa a um rascunho de Release.
-# Dispare com uma tag:  git tag v4.1.0 && git push origin v4.1.0
+# Gera instaladores para Linux (.deb, .rpm, .AppImage) e Windows (.exe, .msi) e anexa ao Release.
+# Dispare criando uma tag de versão:
+#   git tag v4.1.0 && git push origin v4.1.0
 on:
   push:
     tags: ['v*']
@@ -11,12 +12,22 @@ permissions:
   contents: write
 
 jobs:
-  build-linux:
-    runs-on: ubuntu-22.04 # glibc mais antiga = AppImage compatível com mais distros
+  release:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'ubuntu-22.04'
+          - platform: 'windows-latest'
+
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Dependências do sistema (WebKitGTK)
+      - name: Dependências do sistema Linux (WebKitGTK)
+        if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev libxdo-dev libssl-dev libayatana-appindicator3-dev xdg-utils file
@@ -43,6 +54,6 @@ jobs:
         with:
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', '__VERSION__') }}
           releaseName: 'Scrumban v__VERSION__'
-          releaseBody: 'Instaladores Linux: .deb (Ubuntu/Debian), .rpm (Fedora/openSUSE) e .AppImage (qualquer distro).'
-          releaseDraft: true
+          releaseBody: 'Instaladores para Linux (.deb, .rpm, .AppImage) e Windows (.exe, .msi).'
+          releaseDraft: false
           prerelease: false

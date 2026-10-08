@@ -28,7 +28,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["appimage", "deb", "rpm"],
+    "targets": "all",
     "category": "Productivity",
     "shortDescription": "Quadro Scrumban pessoal, offline-first",
     "longDescription": "Scrumban Pessoal para desenvolvedores solo: quadro Kanban com sprints, limite WIP, métricas de fluxo (lead time, cycle time, throughput), prazos, subtarefas e backups automáticos. Funciona 100% offline.",
