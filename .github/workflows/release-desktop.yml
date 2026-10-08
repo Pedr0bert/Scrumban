@@ -45,6 +45,9 @@ jobs:
 
       - run: npm ci
 
+      - name: Construir assets do frontend
+        run: npm run build
+
       - name: Testes do núcleo nativo
         run: cargo test --manifest-path src-tauri/Cargo.toml --lib
 
