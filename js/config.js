@@ -9,6 +9,7 @@ import { mostrarToast, atualizarFiltrosUI } from './ui.js';
 import { renderizarQuadro, verificarPontoReabastecimento, atualizarContadoresColunas, atualizarWipBadge, atualizarOverdueBadge } from './kanban.js';
 import { obterPreferenciaTema, ehTemaEscuroAtivo, atualizarUIModoTema } from './theme.js';
 import { renderizarConfigSync } from './sync.js';
+import { renderizarConfigDesktop } from './desktop.js';
 
 export function renderizarAbaConfig() {
     const inputWip = document.getElementById('configWipLimit');
@@ -30,6 +31,7 @@ export function renderizarAbaConfig() {
     atualizarUIModoSubtasksVisibilidade();
     atualizarUIModoTema(obterPreferenciaTema(), ehTemaEscuroAtivo());
     renderizarConfigSync();
+    renderizarConfigDesktop();
 }
 
 export function salvarConfigSubtasksVisibilidade(modo) {

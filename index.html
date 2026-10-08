@@ -3,16 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scrumban Pessoal - Teste Produção</title>
+    <title>Scrumban</title>
     
     <!-- Ícone da Aplicação e Favicon -->
     <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
     <link rel="apple-touch-icon" href="assets/icon.svg">
     
-    <!-- Google Fonts: Crimson Pro -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,300;0,400;0,600;0,700;1,400;1,600&display=swap" rel="stylesheet">
+    <!-- Crimson Pro é carregada localmente via @font-face em css/style.css (assets/fonts, licença OFL) -->
     
     <!-- Configuração de Tema & Prevenção de FOUC -->
     <!-- "light dark" aqui é só o valor inicial antes do CSS carregar (evita flash).
@@ -23,7 +20,11 @@
         (function() {
             try {
                 const salvo = localStorage.getItem('scrumban_theme');
-                const prefereEscuro = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                // No app desktop (Linux) a casca nativa informa o tema do sistema
+                const desk = window.__SCRUMBAN_DESKTOP__;
+                const prefereEscuro = (desk && typeof desk.sistemaEscuro === 'boolean' && navigator.userAgent.indexOf('Linux') !== -1)
+                    ? desk.sistemaEscuro
+                    : !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
                 if (salvo === 'dark' || (!salvo && prefereEscuro)) {
                     document.documentElement.classList.add('dark');
                 } else {
@@ -541,11 +542,11 @@
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Data de Início</label>
-                                <input type="date" id="sprintInicio" required onclick="if(this.showPicker) this.showPicker()" class="w-full p-2 border border-beige rounded-sm text-sm focus:outline-none focus:border-terracota cursor-pointer">
+                                <input type="date" id="sprintInicio" required class="w-full p-2 border border-beige rounded-sm text-sm focus:outline-none focus:border-terracota cursor-pointer">
                             </div>
                             <div>
                                 <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Data de Término</label>
-                                <input type="date" id="sprintFim" required onclick="if(this.showPicker) this.showPicker()" class="w-full p-2 border border-beige rounded-sm text-sm focus:outline-none focus:border-terracota cursor-pointer">
+                                <input type="date" id="sprintFim" required class="w-full p-2 border border-beige rounded-sm text-sm focus:outline-none focus:border-terracota cursor-pointer">
                             </div>
                         </div>
                         <div class="flex justify-end pt-2">
@@ -720,6 +721,23 @@
                         <button type="button" onclick="sincronizarRemoto()" class="border border-beige bg-offwhite hover:bg-beige text-dark font-serif px-4 py-2 rounded-sm text-sm">Sincronizar agora</button>
                         <button type="button" onclick="removerConfigSync()" class="text-xs text-gray-500 hover:text-terracota underline ml-auto font-serif">Desconectar este dispositivo</button>
                     </div>
+                </div>
+
+                <!-- App Desktop: backups automáticos em disco (visível só no app Tauri) -->
+                <div id="config-desktop-card" class="hidden bg-white p-6 border border-beige rounded-sm shadow-xs">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="font-serif text-xl font-bold text-dark">App Desktop & Backups Automáticos</h3>
+                        <span id="config-desktop-versao" class="text-xs font-mono px-2 py-0.5 rounded-sm bg-beige text-gray-700"></span>
+                    </div>
+                    <p class="font-serif text-sm text-gray-600 mb-3">
+                        No app desktop, uma cópia completa dos seus dados (incluindo imagens) é gravada em disco automaticamente a cada alteração, uma por dia, mantendo os últimos 14 dias.
+                    </p>
+                    <p id="config-desktop-status" class="text-xs font-sans text-musgo font-semibold mb-3"></p>
+                    <ul id="config-desktop-backups" class="space-y-1.5 mb-4 max-h-56 overflow-y-auto custom-scrollbar pr-1"></ul>
+                    <button type="button" onclick="abrirPastaBackups()" class="border border-beige bg-offwhite hover:bg-beige text-dark font-serif px-4 py-2 rounded-sm text-sm flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
+                        Abrir pasta de backups
+                    </button>
                 </div>
 
                 <!-- Backup de Dados -->
@@ -940,7 +958,7 @@
                     </div>
                     <div>
                         <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Data Limite (Due Date)</label>
-                        <input type="date" id="inputDueDate" onclick="if(this.showPicker) this.showPicker()" class="w-full p-2 bg-white text-dark border border-beige rounded-sm text-sm focus:outline-none focus:border-terracota cursor-pointer">
+                        <input type="date" id="inputDueDate" class="w-full p-2 bg-white text-dark border border-beige rounded-sm text-sm focus:outline-none focus:border-terracota cursor-pointer">
                     </div>
                 </div>
 
@@ -1085,11 +1103,11 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                         <label for="editar-sprint-inicio" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Data Início</label>
-                        <input type="date" id="editar-sprint-inicio" required onclick="if(this.showPicker) this.showPicker()" class="w-full p-2.5 bg-white border border-beige rounded-sm font-sans text-sm text-dark focus:outline-hidden focus:border-terracota cursor-pointer">
+                        <input type="date" id="editar-sprint-inicio" required class="w-full p-2.5 bg-white border border-beige rounded-sm font-sans text-sm text-dark focus:outline-hidden focus:border-terracota cursor-pointer">
                     </div>
                     <div>
                         <label for="editar-sprint-fim" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Data Fim</label>
-                        <input type="date" id="editar-sprint-fim" required onclick="if(this.showPicker) this.showPicker()" class="w-full p-2.5 bg-white border border-beige rounded-sm font-sans text-sm text-dark focus:outline-hidden focus:border-terracota cursor-pointer">
+                        <input type="date" id="editar-sprint-fim" required class="w-full p-2.5 bg-white border border-beige rounded-sm font-sans text-sm text-dark focus:outline-hidden focus:border-terracota cursor-pointer">
                     </div>
                 </div>
                 <div class="flex items-center justify-end gap-2 pt-3 border-t border-beige mt-6">
@@ -1519,6 +1537,22 @@
     <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm pointer-events-none" aria-live="polite"></div>
 
     <!-- Script Principal da Aplicação (Compatibilidade universal: duplo clique / file:// e HTTP) -->
+    <!-- ================= DIÁLOGO GENÉRICO (CONFIRMAÇÃO / TEXTO) ================= -->
+    <dialog id="modalDialogoApp" class="p-0 border-0 rounded-sm shadow-2xl bg-white w-[90%] max-w-sm">
+        <div class="p-6">
+            <h3 id="dialogo-app-titulo" class="font-serif text-xl font-bold text-dark mb-2 leading-snug"></h3>
+            <p id="dialogo-app-mensagem" class="font-serif text-[15px] text-gray-600 mb-4 leading-relaxed"></p>
+            <div id="dialogo-app-campo-wrap" class="hidden mb-4">
+                <label id="dialogo-app-rotulo" for="dialogo-app-campo" class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1"></label>
+                <input type="text" id="dialogo-app-campo" autocomplete="off" class="w-full p-2.5 border border-beige rounded-sm font-serif text-base focus:outline-none focus:border-terracota">
+            </div>
+            <div class="flex items-center justify-end gap-2 pt-3 border-t border-beige">
+                <button type="button" id="dialogo-app-cancelar" class="px-4 py-2 font-serif text-gray-600 hover:text-dark text-sm">Cancelar</button>
+                <button type="button" id="dialogo-app-ok" class="bg-dark hover:bg-opacity-90 text-white px-5 py-2 rounded-sm font-serif text-sm shadow-xs">Confirmar</button>
+            </div>
+        </div>
+    </dialog>
+
     <script src="js/app.js"></script>
 </body>
 </html>

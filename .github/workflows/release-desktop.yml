@@ -1,0 +1,48 @@
+name: Release Desktop (Linux)
+
+# Gera .deb, .rpm e .AppImage e anexa a um rascunho de Release.
+# Dispare com uma tag:  git tag v4.1.0 && git push origin v4.1.0
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-22.04 # glibc mais antiga = AppImage compatível com mais distros
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependências do sistema (WebKitGTK)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev libxdo-dev libssl-dev libayatana-appindicator3-dev xdg-utils file
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - run: npm ci
+
+      - name: Testes do núcleo nativo
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', '__VERSION__') }}
+          releaseName: 'Scrumban v__VERSION__'
+          releaseBody: 'Instaladores Linux: .deb (Ubuntu/Debian), .rpm (Fedora/openSUSE) e .AppImage (qualquer distro).'
+          releaseDraft: true
+          prerelease: false

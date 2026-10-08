@@ -311,8 +311,6 @@
         if (progresso.totalChecklist > 0) tooltipProgresso += ` \u2022 ${progresso.checklistDone}/${progresso.totalChecklist} itens de checklist`;
         if (progresso.totalFilhas > 0) tooltipProgresso += ` \u2022 ${progresso.filhasDone}/${progresso.totalFilhas} sub-tarefas filhas`;
         if (sprintVencida) tooltipProgresso += ` \u2022 Prazo da sprint vencido h\xE1 ${diasAtraso} dia(s)`;
-        elCur.classList.toggle("border-terracota", sprintVencida);
-        elCur.classList.toggle("animate-pulse", false);
         elCur.innerHTML = `
                 <div class="min-w-0 flex-1">
                     <p class="text-xs font-bold uppercase tracking-wider text-terracota mb-0.5 sm:mb-1 truncate flex items-center gap-1.5">
@@ -534,17 +532,19 @@
     renderizarQuadro();
     mostrarToast(`Sprint "${nome}" atualizada com sucesso!`, "sucesso");
   }
-  function excluirSprintAtual() {
+  async function excluirSprintAtual() {
     const cur = appState.sprints.find((s) => s.status === "current");
     if (!cur) {
       mostrarToast("Nenhuma sprint ativa no momento.", "info");
       return;
     }
-    if (!confirm(`Tem certeza que deseja excluir a Sprint Atual "${cur.name}"?
-
-As tarefas cadastradas no quadro ser\xE3o mantidas, mas o ciclo atual ser\xE1 cancelado.`)) {
-      return;
-    }
+    const ok = await confirmarAcao({
+      titulo: `Excluir a sprint "${cur.name}"?`,
+      mensagem: "As tarefas do quadro ser\xE3o mantidas, mas o ciclo atual ser\xE1 cancelado.",
+      textoConfirmar: "Excluir sprint",
+      perigo: true
+    });
+    if (!ok) return;
     const nomeExcluido = cur.name;
     const sprintId = cur.id;
     appState.tasks.forEach((t) => {
@@ -589,8 +589,14 @@ As tarefas cadastradas no quadro ser\xE3o mantidas, mas o ciclo atual ser\xE1 ca
     renderizarHeaderSprints2();
     mostrarToast(`Sprint "${nome}" adicionada com sucesso como ${novaSprint.status === "current" ? "Atual" : "Futura"}!`, "sucesso");
   }
-  function ativarSprintFutura(sprintId) {
-    if (!confirm("Deseja definir esta Sprint como a Sprint Atual?")) return;
+  async function ativarSprintFutura(sprintId) {
+    const alvo = appState.sprints.find((s) => s.id === sprintId);
+    const ok = await confirmarAcao({
+      titulo: `Tornar "${alvo ? alvo.name : "esta sprint"}" a Sprint Atual?`,
+      mensagem: "Se houver uma sprint atual, ela volta para a fila de pr\xF3ximas sprints.",
+      textoConfirmar: "Tornar atual"
+    });
+    if (!ok) return;
     appState.sprints.forEach((s) => {
       if (s.id === sprintId) s.status = "current";
       else if (s.status === "current") s.status = "future";
@@ -600,8 +606,14 @@ As tarefas cadastradas no quadro ser\xE3o mantidas, mas o ciclo atual ser\xE1 ca
     renderizarQuadro();
     mostrarToast("Sprint ativada como atual no Quadro!", "sucesso");
   }
-  function excluirSprintFutura(sprintId) {
-    if (!confirm("Deseja remover esta Sprint planejada?")) return;
+  async function excluirSprintFutura(sprintId) {
+    const alvo = appState.sprints.find((s) => s.id === sprintId);
+    const ok = await confirmarAcao({
+      titulo: `Remover "${alvo ? alvo.name : "esta sprint"}" do planejamento?`,
+      textoConfirmar: "Remover",
+      perigo: true
+    });
+    if (!ok) return;
     appState.sprints = appState.sprints.filter((s) => s.id !== sprintId);
     saveState();
     renderizarAbaSprints2();
@@ -674,7 +686,7 @@ As tarefas cadastradas no quadro ser\xE3o mantidas, mas o ciclo atual ser\xE1 ca
     subtasksTemporarias = [];
     imagensTemporarias = [];
   }
-  function salvarTarefaForm() {
+  async function salvarTarefaForm() {
     const titulo = document.getElementById("inputTitulo").value.trim();
     if (!titulo) {
       mostrarToast("Por favor, informe o t\xEDtulo da tarefa.", "erro");
@@ -683,7 +695,12 @@ As tarefas cadastradas no quadro ser\xE3o mantidas, mas o ciclo atual ser\xE1 ca
     }
     let projeto = document.getElementById("inputProjeto").value;
     if (projeto === "__novo__") {
-      const novo = prompt("Nome do novo projeto ou categoria:");
+      const novo = await pedirTexto({
+        titulo: "Novo projeto",
+        rotulo: "Nome do projeto ou categoria",
+        placeholder: "Ex: Cliente Acme",
+        textoConfirmar: "Criar projeto"
+      });
       if (novo && novo.trim()) {
         projeto = novo.trim();
         if (!appState.settings.projects.includes(projeto)) {
@@ -1882,6 +1899,167 @@ As tarefas cadastradas no quadro ser\xE3o mantidas, mas o ciclo atual ser\xE1 ca
     aplicarEstadoColunaExpandida();
   }
 
+  // js/desktop.js
+  var DEBOUNCE_BACKUP_MS = 20 * 1e3;
+  var timerBackup = null;
+  var geradorBackup = null;
+  var ultimoBackupAuto = null;
+  var backupsConhecidos = [];
+  function ehDesktop() {
+    return !!(window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === "function");
+  }
+  function invocar(comando, args = {}) {
+    return window.__TAURI__.core.invoke(comando, args);
+  }
+  function janelaAtual() {
+    return window.__TAURI__?.window?.getCurrentWindow?.() || null;
+  }
+  function sistemaPrefereEscuro() {
+    const info = window.__SCRUMBAN_DESKTOP__;
+    if (info && typeof info.sistemaEscuro === "boolean" && navigator.userAgent.includes("Linux")) {
+      return info.sistemaEscuro;
+    }
+    return !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  }
+  function aplicarTemaNativo(escuro) {
+    if (!ehDesktop()) return;
+    invocar("aplicar_tema_nativo", { escuro }).catch((e) => console.warn("Tema nativo n\xE3o aplicado:", e));
+  }
+  async function mostrarJanela() {
+    const janela = janelaAtual();
+    if (!janela) return;
+    try {
+      await janela.show();
+      await janela.setFocus();
+    } catch (e) {
+      console.warn("N\xE3o foi poss\xEDvel exibir a janela:", e);
+    }
+  }
+  async function alternarTelaCheia() {
+    const janela = janelaAtual();
+    if (!janela) return;
+    try {
+      await janela.setFullscreen(!await janela.isFullscreen());
+    } catch (e) {
+      console.warn("Tela cheia indispon\xEDvel:", e);
+    }
+  }
+  async function salvarArquivo({ nome, conteudo, mime = "text/plain", filtroNome = "Arquivo", extensoes = [] }) {
+    if (ehDesktop()) {
+      const r = await invocar("salvar_arquivo", {
+        nomeSugerido: nome,
+        conteudo,
+        filtroNome,
+        extensoes
+      });
+      return r ? { status: "salvo", caminho: r.caminho } : { status: "cancelado" };
+    }
+    const blob = new Blob([conteudo], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = nome;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 1e3);
+    return { status: "baixado" };
+  }
+  function configurarGeradorBackup(fn) {
+    geradorBackup = fn;
+  }
+  function agendarBackupAutomatico(imediato = false) {
+    if (!ehDesktop() || !geradorBackup) return;
+    clearTimeout(timerBackup);
+    timerBackup = setTimeout(executarBackupAutomatico, imediato ? 1500 : DEBOUNCE_BACKUP_MS);
+  }
+  async function executarBackupAutomatico() {
+    try {
+      const conteudo = JSON.stringify(await geradorBackup());
+      backupsConhecidos = await invocar("backup_automatico", { dia: hojeISOLocal(), conteudo });
+      ultimoBackupAuto = /* @__PURE__ */ new Date();
+      renderizarConfigDesktop();
+    } catch (e) {
+      console.warn("Backup autom\xE1tico falhou:", e);
+    }
+  }
+  function formatarTamanho(bytes) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
+  async function abrirPastaBackups() {
+    try {
+      await invocar("abrir_pasta_backups");
+    } catch (e) {
+      window.mostrarToast?.(`N\xE3o foi poss\xEDvel abrir a pasta: ${e}`, "erro");
+    }
+  }
+  async function lerBackupAutomatico(nome) {
+    return JSON.parse(await invocar("ler_backup", { nome }));
+  }
+  async function renderizarConfigDesktop() {
+    const card = document.getElementById("config-desktop-card");
+    if (!card) return;
+    if (!ehDesktop()) {
+      card.classList.add("hidden");
+      return;
+    }
+    card.classList.remove("hidden");
+    const versao = document.getElementById("config-desktop-versao");
+    if (versao) versao.textContent = `v${window.__SCRUMBAN_DESKTOP__?.versao || "?"}`;
+    if (!backupsConhecidos.length) {
+      try {
+        backupsConhecidos = await invocar("listar_backups");
+      } catch (_) {
+      }
+    }
+    const status = document.getElementById("config-desktop-status");
+    if (status) {
+      status.textContent = ultimoBackupAuto ? `\xDAltimo backup autom\xE1tico: ${ultimoBackupAuto.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : backupsConhecidos.length ? "Backups autom\xE1ticos ativos" : "O primeiro backup ser\xE1 criado em instantes";
+    }
+    const lista = document.getElementById("config-desktop-backups");
+    if (!lista) return;
+    if (!backupsConhecidos.length) {
+      lista.innerHTML = '<li class="text-xs text-gray-400 font-serif italic">Nenhum backup autom\xE1tico ainda.</li>';
+      return;
+    }
+    lista.innerHTML = backupsConhecidos.map((b) => {
+      const dia = b.nome.replace("scrumban-auto-", "").replace(".json", "");
+      const [a, m, d] = dia.split("-");
+      return `
+            <li class="flex items-center justify-between gap-3 p-2 bg-offwhite border border-beige rounded-sm text-sm">
+                <span class="font-serif text-base text-dark">${d}/${m}/${a}</span>
+                <span class="text-xs font-mono text-gray-500 ml-auto">${formatarTamanho(b.tamanho)}</span>
+                <button type="button" data-backup="${escapeHTML(b.nome)}" class="btn-restaurar-backup text-xs text-terracota hover:underline font-sans">Restaurar</button>
+            </li>`;
+    }).join("");
+  }
+  function inicializarDesktop({ aoRestaurarBackup } = {}) {
+    if (!ehDesktop()) return;
+    document.documentElement.classList.add("is-desktop");
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "F11") {
+        e.preventDefault();
+        alternarTelaCheia();
+      }
+      if ((e.key === "F5" || (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "r") && !e.shiftKey) {
+        e.preventDefault();
+      }
+    });
+    document.addEventListener("contextmenu", (e) => {
+      const alvo = e.target;
+      const editavel = alvo.closest && alvo.closest('input, textarea, [contenteditable="true"]');
+      const temSelecao = String(window.getSelection && window.getSelection()).length > 0;
+      if (!editavel && !temSelecao) e.preventDefault();
+    });
+    document.getElementById("config-desktop-backups")?.addEventListener("click", (e) => {
+      const btn = e.target.closest(".btn-restaurar-backup");
+      if (btn && typeof aoRestaurarBackup === "function") aoRestaurarBackup(btn.dataset.backup);
+    });
+    agendarBackupAutomatico(true);
+  }
+
   // js/metrics.js
   function calcularMetricasFluxo() {
     const agora = Date.now();
@@ -2337,7 +2515,7 @@ As tarefas cadastradas no quadro ser\xE3o mantidas, mas o ciclo atual ser\xE1 ca
       mostrarToast("N\xE3o foi poss\xEDvel copiar para a \xE1rea de transfer\xEAncia.", "erro");
     }
   }
-  function baixarCsvSprint(histId) {
+  async function baixarCsvSprint(histId) {
     const hist = (appState.history || []).find((h) => h.id === histId);
     if (!hist) {
       mostrarToast("Sprint n\xE3o encontrada no hist\xF3rico.", "erro");
@@ -2377,17 +2555,21 @@ As tarefas cadastradas no quadro ser\xE3o mantidas, mas o ciclo atual ser\xE1 ca
       linhas.push(linha.map(escapeCsv).join(";"));
     });
     const conteudoCsv = "\uFEFF" + linhas.join("\r\n");
-    const blob = new Blob([conteudoCsv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
     const slug = (hist.sprintName || "sprint").toLowerCase().replace(/[^a-z0-9_-]/gi, "_");
-    link.href = url;
-    link.download = `entregas-${slug}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    mostrarToast(`CSV da sprint "${hist.sprintName}" baixado com sucesso!`, "sucesso");
+    try {
+      const r = await salvarArquivo({
+        nome: `entregas-${slug}.csv`,
+        conteudo: conteudoCsv,
+        mime: "text/csv;charset=utf-8",
+        filtroNome: "Planilha CSV",
+        extensoes: ["csv"]
+      });
+      if (r.status === "cancelado") return;
+      mostrarToast(r.status === "salvo" ? `CSV salvo em ${r.caminho}` : `CSV da sprint "${hist.sprintName}" baixado com sucesso!`, "sucesso", 5e3);
+    } catch (err) {
+      console.error("Erro ao salvar CSV:", err);
+      mostrarToast("N\xE3o foi poss\xEDvel salvar o CSV: " + (err.message || err), "erro");
+    }
   }
 
   // js/sprint-closure.js
@@ -2498,17 +2680,18 @@ As tarefas cadastradas no quadro ser\xE3o mantidas, mas o ciclo atual ser\xE1 ca
     renderizarAbaHistorico();
     mostrarToast("Notas da sprint salvas com sucesso!", "sucesso");
   }
-  function reabrirSprintHistorico(histId) {
+  async function reabrirSprintHistorico(histId) {
     const hist = (appState.history || []).find((h) => h.id === histId);
     if (!hist) {
       mostrarToast("Sprint n\xE3o encontrada no hist\xF3rico.", "erro");
       return;
     }
-    if (!confirm(`Deseja reabrir a sprint "${hist.sprintName}"?
-
-Ela voltar\xE1 a ser a Sprint Atual no Quadro e suas tarefas conclu\xEDdas ser\xE3o restauradas.`)) {
-      return;
-    }
+    const ok = await confirmarAcao({
+      titulo: `Reabrir a sprint "${hist.sprintName}"?`,
+      mensagem: "Ela volta a ser a Sprint Atual no Quadro e as tarefas entregues retornam para Done.",
+      textoConfirmar: "Reabrir sprint"
+    });
+    if (!ok) return;
     appState.sprints.forEach((s) => {
       if (s.status === "current") {
         s.status = "future";
@@ -2560,17 +2743,19 @@ Ela voltar\xE1 a ser a Sprint Atual no Quadro e suas tarefas conclu\xEDdas ser\x
     mudarAba("view-quadro");
     mostrarToast(`Sprint "${hist.sprintName}" reaberta com sucesso no Quadro!`, "sucesso");
   }
-  function excluirSprintHistorico(histId) {
+  async function excluirSprintHistorico(histId) {
     const hist = (appState.history || []).find((h) => h.id === histId);
     if (!hist) {
       mostrarToast("Sprint n\xE3o encontrada no hist\xF3rico.", "erro");
       return;
     }
-    if (!confirm(`Tem certeza que deseja excluir permanentemente o registro da sprint "${hist.sprintName}" do hist\xF3rico?
-
-Esta a\xE7\xE3o n\xE3o poder\xE1 ser desfeita.`)) {
-      return;
-    }
+    const ok = await confirmarAcao({
+      titulo: `Excluir "${hist.sprintName}" do hist\xF3rico?`,
+      mensagem: "O registro e a lista de entregas desta sprint ser\xE3o apagados permanentemente.",
+      textoConfirmar: "Excluir registro",
+      perigo: true
+    });
+    if (!ok) return;
     appState.history = appState.history.filter((h) => h.id !== histId);
     saveState();
     renderizarAbaHistorico();
@@ -2700,13 +2885,13 @@ Esta a\xE7\xE3o n\xE3o poder\xE1 ser desfeita.`)) {
     return document.documentElement.classList.contains("dark");
   }
   function aplicarTema(modo) {
-    const prefereEscuroSistema = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-    let deveFicarEscuro = modo === "dark" || modo !== "light" && prefereEscuroSistema;
+    const deveFicarEscuro = modo === "dark" || modo !== "light" && sistemaPrefereEscuro();
     if (deveFicarEscuro) {
       document.documentElement.classList.add("dark");
     } else {
       document.documentElement.classList.remove("dark");
     }
+    aplicarTemaNativo(deveFicarEscuro);
     atualizarUIModoTema(modo, deveFicarEscuro);
   }
   function definirTema(modo) {
@@ -3058,6 +3243,7 @@ Esta a\xE7\xE3o n\xE3o poder\xE1 ser desfeita.`)) {
     atualizarUIModoSubtasksVisibilidade();
     atualizarUIModoTema(obterPreferenciaTema(), ehTemaEscuroAtivo());
     renderizarConfigSync();
+    renderizarConfigDesktop();
   }
   function salvarConfigSubtasksVisibilidade(modo) {
     const novoModo = modo === "parent_only" ? "parent_only" : "all";
@@ -3172,6 +3358,172 @@ Esta a\xE7\xE3o n\xE3o poder\xE1 ser desfeita.`)) {
     const overlay = document.getElementById("mobile-drawer-overlay");
     if (sidebar) sidebar.classList.remove("mobile-open");
     if (overlay) overlay.classList.add("hidden");
+  }
+
+  // js/datepicker.js
+  var MESES = ["Janeiro", "Fevereiro", "Mar\xE7o", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+  var DIAS_SEMANA = ["D", "S", "T", "Q", "Q", "S", "S"];
+  var popover = null;
+  var inputAtivo = null;
+  var anoVisivel = 0;
+  var mesVisivel = 0;
+  var pad = (n) => String(n).padStart(2, "0");
+  var isoDe = (a, m, d) => `${a}-${pad(m + 1)}-${pad(d)}`;
+  function criarPopover() {
+    const el = document.createElement("div");
+    el.id = "seletor-data";
+    el.setAttribute("role", "dialog");
+    el.setAttribute("aria-label", "Escolher data");
+    el.className = "seletor-data bg-white border border-beige rounded-sm shadow-lg p-3 select-none";
+    el.addEventListener("click", aoClicarNoPopover);
+    return el;
+  }
+  function renderizar() {
+    const hoje = hojeISOLocal();
+    const selecionada = inputAtivo ? inputAtivo.value : "";
+    const primeiroDiaSemana = new Date(anoVisivel, mesVisivel, 1).getDay();
+    const diasNoMes = new Date(anoVisivel, mesVisivel + 1, 0).getDate();
+    let celulas = "";
+    for (let i = 0; i < primeiroDiaSemana; i++) celulas += "<span></span>";
+    for (let d = 1; d <= diasNoMes; d++) {
+      const iso = isoDe(anoVisivel, mesVisivel, d);
+      const classes = ["seletor-data-dia"];
+      if (iso === hoje) classes.push("is-hoje");
+      if (iso === selecionada) classes.push("is-selecionado");
+      celulas += `<button type="button" class="${classes.join(" ")}" data-data="${iso}" aria-label="${d} de ${MESES[mesVisivel]} de ${anoVisivel}"${iso === selecionada ? ' aria-pressed="true"' : ""}>${d}</button>`;
+    }
+    const podeLimpar = inputAtivo && !inputAtivo.required && inputAtivo.value;
+    popover.innerHTML = `
+        <div class="flex items-center justify-between mb-2">
+            <button type="button" class="seletor-data-nav" data-nav="-1" aria-label="M\xEAs anterior">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+            </button>
+            <span class="font-serif text-base font-bold text-dark">${MESES[mesVisivel]} ${anoVisivel}</span>
+            <button type="button" class="seletor-data-nav" data-nav="1" aria-label="Pr\xF3ximo m\xEAs">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+            </button>
+        </div>
+        <div class="seletor-data-grade text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">
+            ${DIAS_SEMANA.map((d) => `<span>${d}</span>`).join("")}
+        </div>
+        <div class="seletor-data-grade">${celulas}</div>
+        <div class="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-beige text-xs font-sans">
+            <button type="button" class="seletor-data-acao" data-acao="hoje">Hoje</button>
+            ${podeLimpar ? '<button type="button" class="seletor-data-acao text-gray-500" data-acao="limpar">Limpar</button>' : ""}
+        </div>
+    `;
+  }
+  function posicionar() {
+    if (!popover || !inputAtivo) return;
+    const r = inputAtivo.getBoundingClientRect();
+    const largura = popover.offsetWidth;
+    const altura = popover.offsetHeight;
+    let left = Math.min(r.left, window.innerWidth - largura - 8);
+    let top = r.bottom + 4;
+    if (top + altura > window.innerHeight - 8) top = Math.max(8, r.top - altura - 4);
+    popover.style.left = `${Math.max(8, left)}px`;
+    popover.style.top = `${top}px`;
+  }
+  function definirValor(iso) {
+    if (!inputAtivo) return;
+    inputAtivo.value = iso;
+    inputAtivo.dispatchEvent(new Event("input", { bubbles: true }));
+    inputAtivo.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  function aoClicarNoPopover(e) {
+    const dia = e.target.closest("[data-data]");
+    if (dia) {
+      definirValor(dia.dataset.data);
+      fecharSeletorData(true);
+      return;
+    }
+    const nav = e.target.closest("[data-nav]");
+    if (nav) {
+      mesVisivel += Number(nav.dataset.nav);
+      if (mesVisivel < 0) {
+        mesVisivel = 11;
+        anoVisivel--;
+      }
+      if (mesVisivel > 11) {
+        mesVisivel = 0;
+        anoVisivel++;
+      }
+      renderizar();
+      posicionar();
+      return;
+    }
+    const acao = e.target.closest("[data-acao]");
+    if (acao) {
+      definirValor(acao.dataset.acao === "hoje" ? hojeISOLocal() : "");
+      fecharSeletorData(true);
+    }
+  }
+  function abrirSeletorData(input) {
+    if (inputAtivo === input && popover && popover.isConnected) return;
+    fecharSeletorData(false);
+    inputAtivo = input;
+    const base = /^\d{4}-\d{2}-\d{2}$/.test(input.value) ? input.value : hojeISOLocal();
+    anoVisivel = Number(base.slice(0, 4));
+    mesVisivel = Number(base.slice(5, 7)) - 1;
+    if (!popover) popover = criarPopover();
+    (input.closest("dialog") || document.body).appendChild(popover);
+    renderizar();
+    posicionar();
+    input.setAttribute("aria-expanded", "true");
+  }
+  function fecharSeletorData(devolverFoco = false) {
+    if (!popover || !popover.isConnected) return;
+    popover.remove();
+    if (inputAtivo) {
+      inputAtivo.setAttribute("aria-expanded", "false");
+      if (devolverFoco) inputAtivo.focus();
+    }
+    inputAtivo = null;
+  }
+  function seletorDataAberto() {
+    return !!(popover && popover.isConnected);
+  }
+  function inicializarSeletorDatas() {
+    document.addEventListener("mousedown", (e) => {
+      const input = e.target.closest && e.target.closest('input[type="date"]');
+      if (!input || input.disabled || input.readOnly) return;
+      e.preventDefault();
+      input.focus();
+      if (seletorDataAberto() && inputAtivo === input) fecharSeletorData(false);
+      else abrirSeletorData(input);
+    }, true);
+    document.addEventListener("click", (e) => {
+      if (e.target.closest && e.target.closest('input[type="date"]')) e.preventDefault();
+    }, true);
+    document.addEventListener("pointerdown", (e) => {
+      if (!seletorDataAberto()) return;
+      if (e.target === inputAtivo || popover.contains(e.target)) return;
+      fecharSeletorData(false);
+    }, true);
+    document.addEventListener("keydown", (e) => {
+      const ehCampoData = e.target && e.target.matches && e.target.matches('input[type="date"]');
+      if (ehCampoData && e.altKey && e.key === "ArrowDown") {
+        e.preventDefault();
+        abrirSeletorData(e.target);
+        return;
+      }
+      if (e.key === "Escape" && seletorDataAberto()) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        fecharSeletorData(true);
+      }
+      if (ehCampoData && seletorDataAberto()) requestAnimationFrame(renderizar);
+    }, true);
+    document.addEventListener("cancel", (e) => {
+      if (seletorDataAberto()) {
+        e.preventDefault();
+        fecharSeletorData(true);
+      }
+    }, true);
+    window.addEventListener("resize", () => fecharSeletorData(false));
+    document.addEventListener("scroll", (e) => {
+      if (seletorDataAberto() && !popover.contains(e.target)) posicionar();
+    }, true);
   }
 
   // js/ui.js
@@ -3467,13 +3819,75 @@ Esta a\xE7\xE3o n\xE3o poder\xE1 ser desfeita.`)) {
     });
   }
   function inicializarComportamentoDatas() {
-    document.addEventListener("pointerdown", (e) => {
-      const ativo = document.activeElement;
-      const ehCampoData = ativo && ativo.tagName === "INPUT" && ativo.type === "date";
-      if (ehCampoData && e.target !== ativo) {
-        ativo.blur();
-      }
-    }, true);
+    inicializarSeletorDatas();
+  }
+  function abrirDialogoApp({ titulo, mensagem, textoConfirmar = "Confirmar", perigo = false, entrada = null }) {
+    const modal = document.getElementById("modalDialogoApp");
+    if (!modal) {
+      return Promise.resolve(entrada ? window.prompt(mensagem || titulo) : window.confirm(`${titulo}
+
+${mensagem || ""}`));
+    }
+    const elTitulo = document.getElementById("dialogo-app-titulo");
+    const elMsg = document.getElementById("dialogo-app-mensagem");
+    const elCampoWrap = document.getElementById("dialogo-app-campo-wrap");
+    const elCampo = document.getElementById("dialogo-app-campo");
+    const elRotulo = document.getElementById("dialogo-app-rotulo");
+    const btnOk = document.getElementById("dialogo-app-ok");
+    const btnCancelar = document.getElementById("dialogo-app-cancelar");
+    elTitulo.textContent = titulo;
+    elMsg.textContent = mensagem || "";
+    elMsg.classList.toggle("hidden", !mensagem);
+    btnOk.textContent = textoConfirmar;
+    btnOk.className = `${perigo ? "bg-terracota" : "bg-dark"} hover:bg-opacity-90 text-white px-5 py-2 rounded-sm font-serif text-sm shadow-xs`;
+    elCampoWrap.classList.toggle("hidden", !entrada);
+    if (entrada) {
+      elRotulo.textContent = entrada.rotulo || "";
+      elCampo.placeholder = entrada.placeholder || "";
+      elCampo.value = entrada.valor || "";
+    }
+    return new Promise((resolve) => {
+      let resultado = entrada ? null : false;
+      const confirmar = () => {
+        if (entrada) {
+          const v = elCampo.value.trim();
+          if (!v) {
+            elCampo.focus();
+            return;
+          }
+          resultado = v;
+        } else {
+          resultado = true;
+        }
+        modal.close();
+      };
+      const aoTeclar = (e) => {
+        if (e.key === "Enter" && entrada) {
+          e.preventDefault();
+          confirmar();
+        }
+      };
+      const aoFechar = () => {
+        btnOk.removeEventListener("click", confirmar);
+        btnCancelar.removeEventListener("click", cancelar);
+        elCampo.removeEventListener("keydown", aoTeclar);
+        modal.removeEventListener("close", aoFechar);
+        resolve(resultado);
+      };
+      const cancelar = () => modal.close();
+      btnOk.addEventListener("click", confirmar);
+      btnCancelar.addEventListener("click", cancelar);
+      elCampo.addEventListener("keydown", aoTeclar);
+      modal.addEventListener("close", aoFechar);
+      modal.showModal();
+      (entrada ? elCampo : btnOk).focus();
+    });
+  }
+  function confirmarAcao({ titulo, mensagem = "", textoConfirmar = "Confirmar", perigo = false }) {
+    return abrirDialogoApp({ titulo, mensagem, textoConfirmar, perigo });
+  }
+  function pedirTexto({ titulo, rotulo = "", placeholder = "", valor = "", textoConfirmar = "Salvar" }) {
+    return abrirDialogoApp({ titulo, textoConfirmar, entrada: { rotulo, placeholder, valor } });
   }
 
   // js/storage.js
@@ -3483,8 +3897,10 @@ Esta a\xE7\xE3o n\xE3o poder\xE1 ser desfeita.`)) {
   var IDB_STORE = "app_state";
   var IDB_STORE_IMAGES = "task_images";
   var idbConectado = false;
+  var conexaoIDB = null;
   function abrirIndexedDB() {
-    return new Promise((resolve, reject) => {
+    if (conexaoIDB) return conexaoIDB;
+    conexaoIDB = new Promise((resolve, reject) => {
       if (!("indexedDB" in window)) {
         return reject(new Error("IndexedDB n\xE3o suportado neste ambiente"));
       }
@@ -3498,9 +3914,23 @@ Esta a\xE7\xE3o n\xE3o poder\xE1 ser desfeita.`)) {
           db.createObjectStore(IDB_STORE_IMAGES);
         }
       };
-      request.onsuccess = () => resolve(request.result);
+      request.onsuccess = () => {
+        const db = request.result;
+        db.onversionchange = () => {
+          db.close();
+          conexaoIDB = null;
+        };
+        db.onclose = () => {
+          conexaoIDB = null;
+        };
+        resolve(db);
+      };
       request.onerror = () => reject(request.error);
+    }).catch((err) => {
+      conexaoIDB = null;
+      throw err;
     });
+    return conexaoIDB;
   }
   async function idbGet(key, storeName = IDB_STORE) {
     const db = await abrirIndexedDB();
@@ -3618,6 +4048,7 @@ Esta a\xE7\xE3o n\xE3o poder\xE1 ser desfeita.`)) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
       } catch (_) {
       }
+      agendarBackupAutomatico();
       observadoresSalvamento.forEach((fn) => {
         try {
           fn();
@@ -3748,21 +4179,73 @@ Esta a\xE7\xE3o n\xE3o poder\xE1 ser desfeita.`)) {
     }
     return { valido: true };
   }
-  function exportarBackupJSON() {
+  async function montarBackupCompleto() {
+    const imagesData = {};
+    const ids = /* @__PURE__ */ new Set();
+    (appState.tasks || []).forEach((t) => (t.images || []).forEach((img) => img && img.id && ids.add(img.id)));
+    for (const id of ids) {
+      const dataUrl = await obterImagemIndexedDB(id);
+      if (dataUrl) imagesData[id] = dataUrl;
+    }
+    return { ...appState, imagesData, exportedAt: (/* @__PURE__ */ new Date()).toISOString() };
+  }
+  configurarGeradorBackup(montarBackupCompleto);
+  async function exportarBackupJSON() {
     try {
+      const anterior = appState.settings.lastBackupDate;
       appState.settings.lastBackupDate = (/* @__PURE__ */ new Date()).toISOString();
-      saveState();
+      const backup = await montarBackupCompleto();
+      const r = await salvarArquivo({
+        nome: `scrumban_backup_${hojeISOLocal()}.json`,
+        conteudo: JSON.stringify(backup, null, 2),
+        mime: "application/json",
+        filtroNome: "Backup do Scrumban (JSON)",
+        extensoes: ["json"]
+      });
+      if (r.status === "cancelado") {
+        appState.settings.lastBackupDate = anterior;
+        return;
+      }
+      await saveState();
       verificarLembreteBackup();
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appState, null, 2));
-      const dlAnchorElem = document.createElement("a");
-      dlAnchorElem.setAttribute("href", dataStr);
-      dlAnchorElem.setAttribute("download", `scrumban_backup_${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.json`);
-      dlAnchorElem.click();
-      mostrarToast("Backup exportado com sucesso! Arquivo JSON baixado.", "sucesso");
+      const totalImagens = Object.keys(backup.imagesData).length;
+      const sufixo = totalImagens ? ` (inclui ${totalImagens} imagem${totalImagens > 1 ? "ns" : ""})` : "";
+      mostrarToast(r.status === "salvo" ? `Backup salvo em ${r.caminho}${sufixo}` : `Backup exportado com sucesso!${sufixo}`, "sucesso", 6e3);
     } catch (err) {
       console.error("Erro ao exportar backup:", err);
-      mostrarToast("Erro ao gerar arquivo de backup: " + err.message, "erro");
+      mostrarToast("Erro ao gerar arquivo de backup: " + (err.message || err), "erro");
     }
+  }
+  async function aplicarBackup(imported) {
+    const validacao = validarSchemaBackup(imported);
+    if (!validacao.valido) {
+      mostrarToast(`Falha na valida\xE7\xE3o do backup: ${validacao.erro}`, "erro", 6500);
+      return false;
+    }
+    let imagensRestauradas = 0;
+    if (imported.imagesData && typeof imported.imagesData === "object") {
+      for (const [id, dataUrl] of Object.entries(imported.imagesData)) {
+        if (typeof dataUrl === "string" && dataUrl.startsWith("data:image/")) {
+          try {
+            await salvarImagemIndexedDB(id, dataUrl);
+            imagensRestauradas++;
+          } catch (_) {
+          }
+        }
+      }
+    }
+    setAppState({
+      settings: { ...DEFAULT_STATE.settings, ...imported.settings },
+      sprints: imported.sprints,
+      tasks: imported.tasks,
+      history: imported.history
+    });
+    garantirOrdemTarefas();
+    await saveState();
+    const sufixo = imagensRestauradas ? ` ${imagensRestauradas} imagem(ns) restaurada(s).` : "";
+    mostrarToast(`Backup restaurado com sucesso!${sufixo}`, "sucesso");
+    verificarLembreteBackup();
+    return true;
   }
   function importarBackupJSON(event, onSucessoCallback) {
     const file = event.target.files[0];
@@ -3770,30 +4253,12 @@ Esta a\xE7\xE3o n\xE3o poder\xE1 ser desfeita.`)) {
     const reader = new FileReader();
     reader.onload = async function(e) {
       try {
-        const imported = JSON.parse(e.target.result);
-        const validacao = validarSchemaBackup(imported);
-        if (!validacao.valido) {
-          mostrarToast(`Falha na valida\xE7\xE3o do backup: ${validacao.erro}`, "erro", 6500);
-          event.target.value = "";
-          return;
-        }
-        setAppState({
-          settings: { ...DEFAULT_STATE.settings, ...imported.settings },
-          sprints: imported.sprints,
-          tasks: imported.tasks,
-          history: imported.history
-        });
-        garantirOrdemTarefas();
-        await saveState();
-        mostrarToast("Backup restaurado com sucesso! Dados sincronizados no IndexedDB.", "sucesso");
-        event.target.value = "";
-        if (typeof onSucessoCallback === "function") {
-          onSucessoCallback();
-        }
-        verificarLembreteBackup();
+        const ok = await aplicarBackup(JSON.parse(e.target.result));
+        if (ok && typeof onSucessoCallback === "function") onSucessoCallback();
       } catch (err) {
         console.error("Erro ao importar backup:", err);
         mostrarToast("Erro ao ler arquivo JSON: " + err.message, "erro", 6e3);
+      } finally {
         event.target.value = "";
       }
     };
@@ -3845,6 +4310,17 @@ Esta a\xE7\xE3o n\xE3o poder\xE1 ser desfeita.`)) {
     try {
       setAppState(JSON.parse(JSON.stringify(DEFAULT_STATE)));
       await saveState();
+      try {
+        const db = await abrirIndexedDB();
+        await new Promise((resolve, reject) => {
+          const tx = db.transaction(IDB_STORE_IMAGES, "readwrite");
+          tx.objectStore(IDB_STORE_IMAGES).clear();
+          tx.oncomplete = resolve;
+          tx.onerror = () => reject(tx.error);
+        });
+      } catch (eImg) {
+        console.warn("N\xE3o foi poss\xEDvel limpar as imagens:", eImg);
+      }
       try {
         sessionStorage.removeItem("scrumban_dismiss_backup_reminder");
       } catch (_) {
@@ -3923,13 +4399,9 @@ Esta a\xE7\xE3o n\xE3o poder\xE1 ser desfeita.`)) {
     adicionarProjetoConfig,
     removerProjetoConfig,
     exportarBackupJSON,
-    importarBackupJSON: (e) => importarBackupJSON(e, () => {
-      atualizarFiltrosUI();
-      renderizarQuadro();
-      renderizarAbaSprints2();
-      renderizarAbaHistorico();
-      renderizarAbaConfig();
-    }),
+    importarBackupJSON: (e) => importarBackupJSON(e, rerenderizarTudo),
+    abrirPastaBackups,
+    mostrarToast,
     restaurarDadosPadrao,
     abrirModalLimparDados,
     fecharModalLimparDados,
@@ -3953,6 +4425,28 @@ Esta a\xE7\xE3o n\xE3o poder\xE1 ser desfeita.`)) {
   Object.entries(globalBindings).forEach(([nome, fn]) => {
     window[nome] = fn;
   });
+  function rerenderizarTudo() {
+    atualizarFiltrosUI();
+    renderizarQuadro();
+    renderizarAbaSprints2();
+    renderizarAbaHistorico();
+    renderizarAbaConfig();
+  }
+  async function restaurarBackupAutomatico(nome) {
+    const dia = nome.replace("scrumban-auto-", "").replace(".json", "").split("-").reverse().join("/");
+    const ok = await confirmarAcao({
+      titulo: `Restaurar o backup de ${dia}?`,
+      mensagem: "Todos os dados atuais ser\xE3o substitu\xEDdos pelos daquele dia. O estado atual continua salvo no backup autom\xE1tico de hoje.",
+      textoConfirmar: "Restaurar backup",
+      perigo: true
+    });
+    if (!ok) return;
+    try {
+      if (await aplicarBackup(await lerBackupAutomatico(nome))) rerenderizarTudo();
+    } catch (e) {
+      mostrarToast(`N\xE3o foi poss\xEDvel restaurar o backup: ${e.message || e}`, "erro", 6e3);
+    }
+  }
   async function bootstrapApp() {
     inicializarBarraLateral();
     inicializarTemaDark();
@@ -3967,6 +4461,9 @@ Esta a\xE7\xE3o n\xE3o poder\xE1 ser desfeita.`)) {
     renderizarQuadro();
     verificarLembreteBackup();
     inicializarSync();
+    inicializarDesktop({ aoRestaurarBackup: restaurarBackupAutomatico });
+    renderizarConfigDesktop();
+    requestAnimationFrame(() => mostrarJanela());
   }
   window.bootstrapApp = bootstrapApp;
   if (document.readyState === "loading") {

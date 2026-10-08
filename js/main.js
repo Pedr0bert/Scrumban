@@ -28,6 +28,7 @@ import {
     executarBackupComLembrete,
     exportarBackupJSON,
     importarBackupJSON,
+    aplicarBackup,
     restaurarDadosPadrao,
     abrirModalLimparDados,
     fecharModalLimparDados,
@@ -145,7 +146,8 @@ import {
     fecharModalAtalhos,
     inicializarEventosModais,
     inicializarAtalhosTeclado,
-    inicializarComportamentoDatas
+    inicializarComportamentoDatas,
+    confirmarAcao
 } from './ui.js';
 
 import {
@@ -154,6 +156,14 @@ import {
     toggleMobileMenu,
     fecharMobileMenu
 } from './sidebar.js';
+
+import {
+    inicializarDesktop,
+    mostrarJanela,
+    abrirPastaBackups,
+    lerBackupAutomatico,
+    renderizarConfigDesktop
+} from './desktop.js';
 
 import {
     inicializarSync,
@@ -231,13 +241,9 @@ const globalBindings = {
     adicionarProjetoConfig,
     removerProjetoConfig,
     exportarBackupJSON,
-    importarBackupJSON: (e) => importarBackupJSON(e, () => {
-        atualizarFiltrosUI();
-        renderizarQuadro();
-        renderizarAbaSprints();
-        renderizarAbaHistorico();
-        renderizarAbaConfig();
-    }),
+    importarBackupJSON: (e) => importarBackupJSON(e, rerenderizarTudo),
+    abrirPastaBackups,
+    mostrarToast,
     restaurarDadosPadrao,
     abrirModalLimparDados,
     fecharModalLimparDados,
@@ -263,6 +269,30 @@ Object.entries(globalBindings).forEach(([nome, fn]) => {
     window[nome] = fn;
 });
 
+function rerenderizarTudo() {
+    atualizarFiltrosUI();
+    renderizarQuadro();
+    renderizarAbaSprints();
+    renderizarAbaHistorico();
+    renderizarAbaConfig();
+}
+
+async function restaurarBackupAutomatico(nome) {
+    const dia = nome.replace('scrumban-auto-', '').replace('.json', '').split('-').reverse().join('/');
+    const ok = await confirmarAcao({
+        titulo: `Restaurar o backup de ${dia}?`,
+        mensagem: 'Todos os dados atuais serão substituídos pelos daquele dia. O estado atual continua salvo no backup automático de hoje.',
+        textoConfirmar: 'Restaurar backup',
+        perigo: true
+    });
+    if (!ok) return;
+    try {
+        if (await aplicarBackup(await lerBackupAutomatico(nome))) rerenderizarTudo();
+    } catch (e) {
+        mostrarToast(`Não foi possível restaurar o backup: ${e.message || e}`, 'erro', 6000);
+    }
+}
+
 async function bootstrapApp() {
     inicializarBarraLateral();
     inicializarTemaDark();
@@ -277,6 +307,10 @@ async function bootstrapApp() {
     renderizarQuadro();
     verificarLembreteBackup();
     inicializarSync();
+    inicializarDesktop({ aoRestaurarBackup: restaurarBackupAutomatico });
+    renderizarConfigDesktop();
+    // A janela do desktop nasce oculta: só aparece com o quadro já pintado (sem flash branco)
+    requestAnimationFrame(() => mostrarJanela());
 }
 
 window.bootstrapApp = bootstrapApp;

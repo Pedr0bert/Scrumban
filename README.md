@@ -31,22 +31,28 @@ Não requer compilação de Rust nem Tauri:
 
 ### 🖥️ Modo 2: Desktop Nativo (Linux)
 
-O aplicativo Desktop utiliza o motor nativo **Tauri v2**, consumindo apenas ~35MB de memória RAM.
+App nativo com **Tauri v2** (WebKitGTK), com a mesma interface da versão web e recursos próprios do desktop:
 
-* **Baixar Instalador Pronto (Releases):**  
-  Baixe o pacote pré-compilado (`.deb` ou `.AppImage`) diretamente na aba de **[Releases](https://github.com/Pedr0bert/Scrumban/releases)** do repositório e instale com 2 cliques.
+- **Backups automáticos em disco**: uma cópia completa (dados + imagens) por dia, mantendo os últimos 14 dias. Dá para restaurar com 1 clique em *Configurações → App Desktop*.
+- **Diálogo nativo "Salvar como…"** para backup JSON e CSV de sprints.
+- **Tema nativo sincronizado**: menus de seleção e barra de título seguem o tema do app (claro/escuro), mesmo que o sistema use outro.
+- **Calendário próprio** em português, que fecha ao clicar fora.
+- **Janela que lembra tamanho e posição**, abre já pintada (sem flash branco) e não abre duas vezes. Também tem tela cheia (`F11`) e zoom (`Ctrl` + `+`/`-`/`0`).
+- **100% offline**: fonte Crimson Pro empacotada e Content-Security-Policy restritiva.
 
-* **Executar / Compilar via Código-Fonte:**
-  ```bash
-  # Instalar dependências:
-  npm install
+**Instalar:** baixe o `.deb` (Ubuntu/Debian), o `.rpm` (Fedora/openSUSE) ou o `.AppImage` (qualquer distro) na aba **[Releases](https://github.com/Pedr0bert/Scrumban/releases)**. Para publicar uma versão nova, crie uma tag `vX.Y.Z`: o workflow `.github/workflows/release-desktop.yml` gera os três instaladores num rascunho de Release.
 
-  # Executar a versão desktop em modo de desenvolvimento:
-  npm run tauri:dev
+**Compilar a partir do código-fonte:**
+```bash
+# Dependências do sistema (Ubuntu/Debian)
+sudo apt install libwebkit2gtk-4.1-dev librsvg2-dev libxdo-dev libssl-dev xdg-utils
 
-  # Gerar os pacotes instaladores nativos (.deb / .AppImage):
-  npm run tauri:build
-  ```
+npm install
+npm run tauri:dev     # desenvolvimento
+npm run tauri:build   # gera .deb, .rpm e .AppImage em src-tauri/target/release/bundle/
+```
+
+Os backups automáticos ficam em `~/.local/share/com.scrumban.app/backups/`.
 
 ---
 
@@ -128,11 +134,14 @@ scrumban/
 │   ├── ui.js                         # Toasts, Undo, navegação de abas e atalhos
 │   ├── sidebar.js                    # Sidebar retrátil e drawer móvel
 │   ├── theme.js                      # Dark Mode e detecção de tema do sistema
+│   ├── desktop.js                    # Integração com o app desktop (diálogos, backups, tema nativo)
+│   ├── datepicker.js                 # Seletor de datas próprio (pt-BR, fecha ao clicar fora)
+│   ├── sync.js                       # Acesso remoto via bot do Telegram
 │   └── app.js                        # Bundle unificado gerado via esbuild
 ├── src-tauri/                        # 🦀 Motor Desktop Nativo (Tauri v2 / Rust)
 │   ├── Cargo.toml                    # Dependências Rust
 │   ├── tauri.conf.json               # Configurações de janela, ícones e builds
-│   └── src/                          # Entrypoint nativo da aplicação desktop
+│   └── src/                          # lib.rs (janela/comandos), backups.rs, tema.rs
 ├── build-dist.js                     # Script de sincronização para build desktop
 ├── favicon.svg                       # Favicon raiz do projeto
 ├── index.html                        # Aplicação web completa

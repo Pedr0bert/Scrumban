@@ -4,7 +4,8 @@ const path = require('path');
 const root = __dirname;
 const dist = path.join(root, 'dist');
 
-// Garantir diretórios limpos
+// Garantir diretórios limpos (remove arquivos antigos que não existem mais no projeto)
+fs.rmSync(dist, { recursive: true, force: true });
 fs.mkdirSync(path.join(dist, 'css'), { recursive: true });
 fs.mkdirSync(path.join(dist, 'js'), { recursive: true });
 fs.mkdirSync(path.join(dist, 'assets'), { recursive: true });
