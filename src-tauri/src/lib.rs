@@ -89,6 +89,13 @@ fn fechar_janela(window: tauri::WebviewWindow) -> Result<(), String> {
     window.close().map_err(|e| e.to_string())
 }
 
+/// Fecha de vez, sem disparar "close-requested" de novo. Usado pelo JS depois de
+/// terminar de gravar os dados pendentes (ver `inicializarDesktop` em js/desktop.js).
+#[tauri::command]
+fn destruir_janela(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.destroy().map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn arrastar_janela(window: tauri::WebviewWindow) -> Result<(), String> {
     window.start_dragging().map_err(|e| e.to_string())
@@ -137,6 +144,7 @@ pub fn run() {
             minimizar_janela,
             alternar_maximizar,
             fechar_janela,
+            destruir_janela,
             arrastar_janela,
             janela_maximizada,
             backups::backup_automatico,

@@ -3,7 +3,7 @@
  * Modulo ES: Formulário de tarefas, categorias/projetos e adição de subtarefas.
  */
 
-import { appState, gerarId, escapeHTML, tarefaCorrespondeFiltros, obterDescendentesIds } from './state.js';
+import { appState, gerarId, escapeHTML, tarefaCorrespondeFiltros, obterDescendentesIds, COLUNAS, COLUNA_NOMES } from './state.js';
 import { saveState, verificarLembreteBackup, salvarImagemIndexedDB, obterImagemIndexedDB, excluirImagemIndexedDB } from './storage.js';
 import { mostrarToast, executarExclusaoComUndo, atualizarFiltrosUI, pedirTexto } from './ui.js';
 import { criarElementoCard, moverCardNoDOM, verificarPlaceholderColuna, atualizarContadoresColunas, atualizarWipBadge, atualizarOverdueBadge, atualizarConteudoCard } from './kanban.js';
@@ -35,8 +35,16 @@ export function abrirModalTarefa(taskId = null, options = {}) {
             invalidos.add(taskId);
         }
         const tarefasPaiCandidatas = appState.tasks.filter(t => !invalidos.has(t.id));
-        selectParent.innerHTML = `<option value="">(Nenhuma - Tarefa Principal)</option>` +
-            tarefasPaiCandidatas.map(t => `<option value="${t.id}">[${escapeHTML(t.project || 'Geral')}] ${escapeHTML(t.title)}</option>`).join('');
+        // Agrupado por coluna e na ordem do quadro, para ficar claro onde cada tarefa está
+        const grupos = COLUNAS.map(col => {
+            const daColuna = tarefasPaiCandidatas
+                .filter(t => t.column === col)
+                .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+            if (!daColuna.length) return '';
+            const opcoes = daColuna.map(t => `<option value="${escapeHTML(t.id)}">[${escapeHTML(t.project || 'Geral')}] ${escapeHTML(t.title)}</option>`).join('');
+            return `<optgroup label="${escapeHTML(COLUNA_NOMES[col] || col)}">${opcoes}</optgroup>`;
+        }).join('');
+        selectParent.innerHTML = `<option value="">(Nenhuma - Tarefa Principal)</option>` + grupos;
     }
 
     const tituloModal = document.getElementById('modal-tarefa-titulo');
@@ -75,7 +83,16 @@ export function abrirModalTarefa(taskId = null, options = {}) {
 
     renderizarListaSubtasks();
     renderizarListaImagensEdicao();
-    if (modalTarefa) modalTarefa.showModal();
+    if (modalTarefa) {
+        modalTarefa.showModal();
+        // O <dialog> foca o primeiro botão (o X); o certo é já poder digitar o título
+        const campoTitulo = document.getElementById('inputTitulo');
+        if (campoTitulo) {
+            campoTitulo.focus();
+            const fim = campoTitulo.value.length;
+            campoTitulo.setSelectionRange(fim, fim);
+        }
+    }
 }
 
 export function fecharModalTarefa() {
@@ -85,7 +102,22 @@ export function fecharModalTarefa() {
     imagensTemporarias = [];
 }
 
+let salvandoTarefa = false;
+
 export async function salvarTarefaForm() {
+    // Evita salvar duas vezes (ex.: Enter + clique, ou Enter repetido). Depois que o
+    // modal fecha, o foco ainda fica um instante no título oculto: um 2º Enter rápido
+    // chegava aqui e criava a tarefa de novo.
+    if (salvandoTarefa || !modalTarefa || !modalTarefa.open) return;
+    salvandoTarefa = true;
+    try {
+        await salvarTarefaFormInterno();
+    } finally {
+        salvandoTarefa = false;
+    }
+}
+
+async function salvarTarefaFormInterno() {
     const titulo = document.getElementById('inputTitulo').value.trim();
     if (!titulo) {
         mostrarToast('Por favor, informe o título da tarefa.', 'erro');
@@ -117,7 +149,9 @@ export async function salvarTarefaForm() {
     const dificuldade = document.getElementById('inputDificuldade')?.value || 'media';
     const coluna = document.getElementById('inputColuna').value;
     const dueDate = document.getElementById('inputDueDate').value;
-    const parentId = (document.getElementById('inputParentId')?.value) || null;
+    let parentId = (document.getElementById('inputParentId')?.value) || null;
+    // A tarefa pai pode ter sido excluída enquanto o formulário estava aberto
+    if (parentId && !appState.tasks.some(t => t.id === parentId)) parentId = null;
     const curSprint = appState.sprints.find(s => s.status === 'current');
 
     if (tarefaEmEdicaoId) {
@@ -395,4 +429,40 @@ export async function renderizarListaImagensEdicao() {
         `;
         container.appendChild(card);
     }
+}
+
+// ================= TECLADO NO MODAL DE TAREFA =================
+
+/**
+ * Enter salva a tarefa a partir do título e dos campos de uma linha.
+ * - Shift+Enter no título quebra a linha.
+ * - Em "Notas" o Enter quebra a linha (texto longo); Ctrl+Enter salva de qualquer campo.
+ * - No campo de checklist o Enter continua adicionando o item.
+ */
+export function inicializarTecladoModalTarefa() {
+    const modal = document.getElementById('modalTarefa');
+    if (!modal) return;
+    modal.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' || e.isComposing || e.defaultPrevented || !modal.open) return;
+        if (document.getElementById('modalDialogoApp')?.open) return;
+        const alvo = e.target;
+        const id = alvo && alvo.id;
+
+        if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            salvarTarefaForm();
+            return;
+        }
+        if (id === 'inputNovaSubtask') return;
+        if (alvo.tagName === 'TEXTAREA') {
+            if (id !== 'inputTitulo' || e.shiftKey) return;
+            e.preventDefault();
+            salvarTarefaForm();
+            return;
+        }
+        if (alvo.tagName === 'INPUT' && alvo.type !== 'checkbox' && alvo.type !== 'file' && alvo.type !== 'radio') {
+            e.preventDefault();
+            salvarTarefaForm();
+        }
+    });
 }

@@ -16,7 +16,9 @@ export const IDB_STORE_IMAGES = 'task_images';
 export let idbConectado = false;
 
 // Helpers de IndexedDB baseados em Promises nativas.
-// A conexão é aberta uma única vez e reutilizada (antes cada get/set abria uma nova).
+// Uma conexão é reutilizada, mas pode ser fechada por baixo do app (o WebKitGTK
+// faz isso). Nesse caso a transação lança InvalidStateError: reabrimos a conexão
+// e tentamos de novo, em vez de perder o salvamento.
 let conexaoIDB = null;
 
 export function abrirIndexedDB() {
@@ -42,6 +44,7 @@ export function abrirIndexedDB() {
             resolve(db);
         };
         request.onerror = () => reject(request.error);
+        request.onblocked = () => reject(new Error('Abertura do IndexedDB bloqueada'));
     }).catch(err => {
         conexaoIDB = null;
         throw err;
@@ -49,37 +52,41 @@ export function abrirIndexedDB() {
     return conexaoIDB;
 }
 
-export async function idbGet(key, storeName = IDB_STORE) {
+/**
+ * Executa uma operação numa transação e só resolve quando ela foi efetivada
+ * (oncomplete), não apenas quando o pedido teve sucesso.
+ */
+async function executarNoIDB(storeName, modo, operacao, tentativa = 1) {
     const db = await abrirIndexedDB();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(storeName, 'readonly');
-        const store = tx.objectStore(storeName);
-        const req = store.get(key);
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-    });
+    try {
+        return await new Promise((resolve, reject) => {
+            const tx = db.transaction(storeName, modo);
+            const req = operacao(tx.objectStore(storeName));
+            tx.oncomplete = () => resolve(req.result);
+            tx.onerror = () => reject(tx.error || req.error);
+            tx.onabort = () => reject(tx.error || new Error('Transação do IndexedDB abortada'));
+        });
+    } catch (e) {
+        const conexaoPerdida = e && (e.name === 'InvalidStateError' || e.name === 'UnknownError' || /clos/i.test(e.message || ''));
+        if (conexaoPerdida && tentativa < 3) {
+            try { db.close(); } catch (_) {}
+            conexaoIDB = null;
+            return executarNoIDB(storeName, modo, operacao, tentativa + 1);
+        }
+        throw e;
+    }
 }
 
-export async function idbSet(key, value, storeName = IDB_STORE) {
-    const db = await abrirIndexedDB();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(storeName, 'readwrite');
-        const store = tx.objectStore(storeName);
-        const req = store.put(value, key);
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-    });
+export function idbGet(key, storeName = IDB_STORE) {
+    return executarNoIDB(storeName, 'readonly', store => store.get(key));
 }
 
-export async function idbDelete(key, storeName = IDB_STORE) {
-    const db = await abrirIndexedDB();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(storeName, 'readwrite');
-        const store = tx.objectStore(storeName);
-        const req = store.delete(key);
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-    });
+export function idbSet(key, value, storeName = IDB_STORE) {
+    return executarNoIDB(storeName, 'readwrite', store => store.put(value, key));
+}
+
+export function idbDelete(key, storeName = IDB_STORE) {
+    return executarNoIDB(storeName, 'readwrite', store => store.delete(key));
 }
 
 // ================= GESTÃO DE IMAGENS NO INDEXEDDB =================
@@ -110,58 +117,54 @@ export async function excluirImagemIndexedDB(imageId) {
     }
 }
 
-// Inicializa o armazenamento com migração automática e transparente de localStorage
-export async function inicializarArmazenamento() {
+function lerLocalStorage() {
     try {
-        let dados = await idbGet('current_state');
+        const raw = localStorage.getItem(STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : null;
+        return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch (e) {
+        console.warn('localStorage ilegível:', e);
+        return null;
+    }
+}
+
+function aplicarDadosCarregados(dados) {
+    setAppState({
+        settings: { ...DEFAULT_STATE.settings, ...(dados.settings || {}) },
+        sprints: Array.isArray(dados.sprints) ? dados.sprints : [],
+        tasks: Array.isArray(dados.tasks) ? dados.tasks : [],
+        history: Array.isArray(dados.history) ? dados.history : []
+    });
+}
+
+/**
+ * Carrega o estado. Cada salvamento grava em IndexedDB e em localStorage com o
+ * mesmo carimbo "savedAt"; na abertura vale a cópia mais recente. Assim, se uma
+ * das gravações falhar, a outra impede que dados antigos (ex.: tarefas já
+ * excluídas) voltem a aparecer.
+ */
+export async function inicializarArmazenamento() {
+    const local = lerLocalStorage();
+    let doIDB = null;
+    try {
+        doIDB = await idbGet('current_state');
         idbConectado = true;
-
-        if (!dados) {
-            // Migração: se houver dados no localStorage anterior, migra automaticamente
-            const rawLocal = localStorage.getItem(STORAGE_KEY);
-            if (rawLocal) {
-                try {
-                    const parsed = JSON.parse(rawLocal);
-                    if (parsed && typeof parsed === 'object') {
-                        dados = parsed;
-                        await idbSet('current_state', dados);
-                        console.info('Scrumban: Dados migrados com sucesso do localStorage para o IndexedDB.');
-                    }
-                } catch (eMig) {
-                    console.warn('Erro ao migrar dados legados do localStorage:', eMig);
-                }
-            }
-        }
-
-        if (dados && typeof dados === 'object') {
-            setAppState({
-                settings: { ...DEFAULT_STATE.settings, ...(dados.settings || {}) },
-                sprints: Array.isArray(dados.sprints) ? dados.sprints : [],
-                tasks: Array.isArray(dados.tasks) ? dados.tasks : [],
-                history: Array.isArray(dados.history) ? dados.history : []
-            });
-        } else {
-            await idbSet('current_state', appState);
-        }
     } catch (err) {
         console.warn('IndexedDB inacessível, utilizando fallback localStorage:', err);
         idbConectado = false;
-        try {
-            const raw = localStorage.getItem(STORAGE_KEY);
-            if (raw) {
-                const parsed = JSON.parse(raw);
-                setAppState({
-                    settings: { ...DEFAULT_STATE.settings, ...(parsed.settings || {}) },
-                    sprints: Array.isArray(parsed.sprints) ? parsed.sprints : [],
-                    tasks: Array.isArray(parsed.tasks) ? parsed.tasks : [],
-                    history: Array.isArray(parsed.history) ? parsed.history : []
-                });
-            }
-        } catch (e2) {
-            console.error('Fallback localStorage também falhou:', e2);
-        }
     }
+
+    let dados = doIDB && typeof doIDB === 'object' ? doIDB : null;
+    if (local && (!dados || (local.savedAt || '') > (dados.savedAt || ''))) {
+        if (dados) console.info('Scrumban: cópia do localStorage é mais recente que a do IndexedDB; usando-a.');
+        dados = local;
+    }
+
+    if (dados) aplicarDadosCarregados(dados);
     garantirOrdemTarefas();
+
+    // Deixa as duas cópias iguais à que foi escolhida
+    if (idbConectado && dados !== doIDB) await saveState();
 }
 
 // Observadores notificados após cada persistência (ex.: publicação do snapshot remoto em js/sync.js)
@@ -170,22 +173,53 @@ export function registrarObservadorSalvamento(fn) {
     if (typeof fn === 'function') observadoresSalvamento.add(fn);
 }
 
-export async function saveState() {
+let filaSalvamento = Promise.resolve();
+let ultimoErroSalvamentoMostrado = 0;
+
+async function gravarEstado() {
+    const savedAt = new Date().toISOString();
+    const copia = { ...appState, savedAt };
+
+    // localStorage primeiro: é síncrono e garante uma cópia mesmo se o IndexedDB falhar
+    let localOk = false;
     try {
-        if (idbConectado) {
-            await idbSet('current_state', appState);
-        }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(copia));
+        localOk = true;
+    } catch (_) {}
+
+    let idbOk = !idbConectado;
+    if (idbConectado) {
         try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
-        } catch (_) {}
-        agendarBackupAutomatico();
-        observadoresSalvamento.forEach(fn => {
-            try { fn(); } catch (eObs) { console.warn('Observador de salvamento falhou:', eObs); }
-        });
-    } catch (e) {
-        console.error('Falha ao salvar dados:', e);
-        mostrarToast('Erro ao salvar dados localmente. Verifique o espaço em disco do navegador.', 'erro', 6000);
+            await idbSet('current_state', copia);
+            idbOk = true;
+        } catch (e) {
+            console.error('Falha ao salvar no IndexedDB:', e);
+        }
     }
+
+    if (!localOk && !idbOk) {
+        if (Date.now() - ultimoErroSalvamentoMostrado > 10000) {
+            ultimoErroSalvamentoMostrado = Date.now();
+            mostrarToast('Erro ao salvar dados localmente. Verifique o espaço em disco.', 'erro', 6000);
+        }
+        return;
+    }
+
+    agendarBackupAutomatico();
+    observadoresSalvamento.forEach(fn => {
+        try { fn(); } catch (eObs) { console.warn('Observador de salvamento falhou:', eObs); }
+    });
+}
+
+/** Salvamentos são enfileirados: nunca concorrem e o último estado sempre vence. */
+export function saveState() {
+    filaSalvamento = filaSalvamento.then(gravarEstado, gravarEstado);
+    return filaSalvamento;
+}
+
+/** Resolve quando todos os salvamentos pendentes terminaram (usado ao fechar o app). */
+export function aguardarSalvamentos() {
+    return filaSalvamento.catch(() => {});
 }
 
 export function atualizarIndicadorArmazenamento() {

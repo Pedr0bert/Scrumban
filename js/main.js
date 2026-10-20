@@ -22,6 +22,7 @@ import {
     idbSet,
     inicializarArmazenamento,
     saveState,
+    aguardarSalvamentos,
     atualizarIndicadorArmazenamento,
     verificarLembreteBackup,
     dispensarLembreteBackup,
@@ -122,7 +123,8 @@ import {
     removerSubtask,
     processarUploadImagemTarefa,
     removerImagemEdicao,
-    atualizarRelacaoImagemEdicao
+    atualizarRelacaoImagemEdicao,
+    inicializarTecladoModalTarefa
 } from './task-edit.js';
 
 import {
@@ -162,6 +164,7 @@ import {
     mostrarJanela,
     abrirPastaBackups,
     lerBackupAutomatico,
+    executarBackupPendente,
     renderizarConfigDesktop
 } from './desktop.js';
 
@@ -302,12 +305,19 @@ async function bootstrapApp() {
     inicializarEventosModais();
     inicializarAtalhosTeclado();
     inicializarComportamentoDatas();
+    inicializarTecladoModalTarefa();
     atualizarFiltrosUI();
     inicializarFiltros();
     renderizarQuadro();
     verificarLembreteBackup();
     inicializarSync();
-    inicializarDesktop({ aoRestaurarBackup: restaurarBackupAutomatico });
+    inicializarDesktop({
+        aoRestaurarBackup: restaurarBackupAutomatico,
+        aoFechar: async () => {
+            await aguardarSalvamentos();
+            await executarBackupPendente();
+        }
+    });
     renderizarConfigDesktop();
     // A janela do desktop nasce oculta: só aparece com o quadro já pintado (sem flash branco)
     requestAnimationFrame(() => mostrarJanela());

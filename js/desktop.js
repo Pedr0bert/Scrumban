@@ -160,7 +160,16 @@ export function agendarBackupAutomatico(imediato = false) {
     timerBackup = setTimeout(executarBackupAutomatico, imediato ? 1500 : DEBOUNCE_BACKUP_MS);
 }
 
+/** Grava agora o backup automático que estava aguardando o intervalo (usado ao fechar). */
+export async function executarBackupPendente() {
+    if (!timerBackup) return;
+    clearTimeout(timerBackup);
+    timerBackup = null;
+    await executarBackupAutomatico();
+}
+
 async function executarBackupAutomatico() {
+    timerBackup = null;
     try {
         const conteudo = JSON.stringify(await geradorBackup());
         backupsConhecidos = await invocar('backup_automatico', { dia: hojeISOLocal(), conteudo });
@@ -233,9 +242,31 @@ export async function renderizarConfigDesktop() {
 
 // ================= BOOTSTRAP =================
 
-export function inicializarDesktop({ aoRestaurarBackup } = {}) {
+export function inicializarDesktop({ aoRestaurarBackup, aoFechar } = {}) {
     if (!ehDesktop()) return;
     document.documentElement.classList.add('is-desktop');
+
+    // Fechar a janela (botão X da barra, Alt+F4 ou pelo sistema) mata o processo da
+    // webview. Antes disso, espera os salvamentos pendentes terminarem — senão a
+    // última alteração (ex.: uma exclusão) podia não chegar ao disco.
+    const janela = janelaAtual();
+    if (janela && typeof janela.onCloseRequested === 'function') {
+        let fechando = false;
+        janela.onCloseRequested(async (evento) => {
+            evento.preventDefault();
+            if (fechando) return;
+            fechando = true;
+            try {
+                await Promise.race([
+                    Promise.resolve(typeof aoFechar === 'function' ? aoFechar() : null),
+                    new Promise(r => setTimeout(r, 3000))
+                ]);
+            } catch (e) {
+                console.warn('Erro ao finalizar antes de fechar:', e);
+            }
+            invocar('destruir_janela').catch(() => janela.destroy());
+        }).catch(e => console.warn('Não foi possível interceptar o fechamento:', e));
+    }
 
     window.addEventListener('keydown', (e) => {
         if (e.key === 'F11') {
