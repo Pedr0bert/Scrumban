@@ -644,7 +644,13 @@
         invalidos.add(taskId);
       }
       const tarefasPaiCandidatas = appState.tasks.filter((t) => !invalidos.has(t.id));
-      selectParent.innerHTML = `<option value="">(Nenhuma - Tarefa Principal)</option>` + tarefasPaiCandidatas.map((t) => `<option value="${t.id}">[${escapeHTML(t.project || "Geral")}] ${escapeHTML(t.title)}</option>`).join("");
+      const grupos = COLUNAS.map((col) => {
+        const daColuna = tarefasPaiCandidatas.filter((t) => t.column === col).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        if (!daColuna.length) return "";
+        const opcoes = daColuna.map((t) => `<option value="${escapeHTML(t.id)}">[${escapeHTML(t.project || "Geral")}] ${escapeHTML(t.title)}</option>`).join("");
+        return `<optgroup label="${escapeHTML(COLUNA_NOMES[col] || col)}">${opcoes}</optgroup>`;
+      }).join("");
+      selectParent.innerHTML = `<option value="">(Nenhuma - Tarefa Principal)</option>` + grupos;
     }
     const tituloModal = document.getElementById("modal-tarefa-titulo");
     const btnExcluir = document.getElementById("btn-excluir-tarefa");
@@ -678,7 +684,15 @@
     }
     renderizarListaSubtasks();
     renderizarListaImagensEdicao();
-    if (modalTarefa) modalTarefa.showModal();
+    if (modalTarefa) {
+      modalTarefa.showModal();
+      const campoTitulo = document.getElementById("inputTitulo");
+      if (campoTitulo) {
+        campoTitulo.focus();
+        const fim = campoTitulo.value.length;
+        campoTitulo.setSelectionRange(fim, fim);
+      }
+    }
   }
   function fecharModalTarefa() {
     if (modalTarefa) modalTarefa.close();
@@ -686,7 +700,17 @@
     subtasksTemporarias = [];
     imagensTemporarias = [];
   }
+  var salvandoTarefa = false;
   async function salvarTarefaForm() {
+    if (salvandoTarefa || !modalTarefa || !modalTarefa.open) return;
+    salvandoTarefa = true;
+    try {
+      await salvarTarefaFormInterno();
+    } finally {
+      salvandoTarefa = false;
+    }
+  }
+  async function salvarTarefaFormInterno() {
     const titulo = document.getElementById("inputTitulo").value.trim();
     if (!titulo) {
       mostrarToast("Por favor, informe o t\xEDtulo da tarefa.", "erro");
@@ -716,7 +740,8 @@
     const dificuldade = document.getElementById("inputDificuldade")?.value || "media";
     const coluna = document.getElementById("inputColuna").value;
     const dueDate = document.getElementById("inputDueDate").value;
-    const parentId = document.getElementById("inputParentId")?.value || null;
+    let parentId = document.getElementById("inputParentId")?.value || null;
+    if (parentId && !appState.tasks.some((t) => t.id === parentId)) parentId = null;
     const curSprint = appState.sprints.find((s) => s.status === "current");
     if (tarefaEmEdicaoId) {
       const index = appState.tasks.findIndex((t) => t.id === tarefaEmEdicaoId);
@@ -957,6 +982,32 @@
         `;
       container.appendChild(card);
     }
+  }
+  function inicializarTecladoModalTarefa() {
+    const modal = document.getElementById("modalTarefa");
+    if (!modal) return;
+    modal.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" || e.isComposing || e.defaultPrevented || !modal.open) return;
+      if (document.getElementById("modalDialogoApp")?.open) return;
+      const alvo = e.target;
+      const id = alvo && alvo.id;
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        salvarTarefaForm();
+        return;
+      }
+      if (id === "inputNovaSubtask") return;
+      if (alvo.tagName === "TEXTAREA") {
+        if (id !== "inputTitulo" || e.shiftKey) return;
+        e.preventDefault();
+        salvarTarefaForm();
+        return;
+      }
+      if (alvo.tagName === "INPUT" && alvo.type !== "checkbox" && alvo.type !== "file" && alvo.type !== "radio") {
+        e.preventDefault();
+        salvarTarefaForm();
+      }
+    });
   }
 
   // js/task-details.js
@@ -2020,7 +2071,14 @@
     clearTimeout(timerBackup);
     timerBackup = setTimeout(executarBackupAutomatico, imediato ? 1500 : DEBOUNCE_BACKUP_MS);
   }
+  async function executarBackupPendente() {
+    if (!timerBackup) return;
+    clearTimeout(timerBackup);
+    timerBackup = null;
+    await executarBackupAutomatico();
+  }
   async function executarBackupAutomatico() {
+    timerBackup = null;
     try {
       const conteudo = JSON.stringify(await geradorBackup());
       backupsConhecidos = await invocar("backup_automatico", { dia: hojeISOLocal(), conteudo });
@@ -2082,9 +2140,27 @@
             </li>`;
     }).join("");
   }
-  function inicializarDesktop({ aoRestaurarBackup } = {}) {
+  function inicializarDesktop({ aoRestaurarBackup, aoFechar } = {}) {
     if (!ehDesktop()) return;
     document.documentElement.classList.add("is-desktop");
+    const janela = janelaAtual();
+    if (janela && typeof janela.onCloseRequested === "function") {
+      let fechando = false;
+      janela.onCloseRequested(async (evento) => {
+        evento.preventDefault();
+        if (fechando) return;
+        fechando = true;
+        try {
+          await Promise.race([
+            Promise.resolve(typeof aoFechar === "function" ? aoFechar() : null),
+            new Promise((r) => setTimeout(r, 3e3))
+          ]);
+        } catch (e) {
+          console.warn("Erro ao finalizar antes de fechar:", e);
+        }
+        invocar("destruir_janela").catch(() => janela.destroy());
+      }).catch((e) => console.warn("N\xE3o foi poss\xEDvel interceptar o fechamento:", e));
+    }
     window.addEventListener("keydown", (e) => {
       if (e.key === "F11") {
         e.preventDefault();
@@ -3999,41 +4075,44 @@ ${mensagem || ""}`));
         resolve(db);
       };
       request.onerror = () => reject(request.error);
+      request.onblocked = () => reject(new Error("Abertura do IndexedDB bloqueada"));
     }).catch((err) => {
       conexaoIDB = null;
       throw err;
     });
     return conexaoIDB;
   }
-  async function idbGet(key, storeName = IDB_STORE) {
+  async function executarNoIDB(storeName, modo, operacao, tentativa = 1) {
     const db = await abrirIndexedDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(storeName, "readonly");
-      const store = tx.objectStore(storeName);
-      const req = store.get(key);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
+    try {
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, modo);
+        const req = operacao(tx.objectStore(storeName));
+        tx.oncomplete = () => resolve(req.result);
+        tx.onerror = () => reject(tx.error || req.error);
+        tx.onabort = () => reject(tx.error || new Error("Transa\xE7\xE3o do IndexedDB abortada"));
+      });
+    } catch (e) {
+      const conexaoPerdida = e && (e.name === "InvalidStateError" || e.name === "UnknownError" || /clos/i.test(e.message || ""));
+      if (conexaoPerdida && tentativa < 3) {
+        try {
+          db.close();
+        } catch (_) {
+        }
+        conexaoIDB = null;
+        return executarNoIDB(storeName, modo, operacao, tentativa + 1);
+      }
+      throw e;
+    }
   }
-  async function idbSet(key, value, storeName = IDB_STORE) {
-    const db = await abrirIndexedDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(storeName, "readwrite");
-      const store = tx.objectStore(storeName);
-      const req = store.put(value, key);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
+  function idbGet(key, storeName = IDB_STORE) {
+    return executarNoIDB(storeName, "readonly", (store) => store.get(key));
   }
-  async function idbDelete(key, storeName = IDB_STORE) {
-    const db = await abrirIndexedDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(storeName, "readwrite");
-      const store = tx.objectStore(storeName);
-      const req = store.delete(key);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
+  function idbSet(key, value, storeName = IDB_STORE) {
+    return executarNoIDB(storeName, "readwrite", (store) => store.put(value, key));
+  }
+  function idbDelete(key, storeName = IDB_STORE) {
+    return executarNoIDB(storeName, "readwrite", (store) => store.delete(key));
   }
   async function salvarImagemIndexedDB(imageId, dataUrl) {
     try {
@@ -4059,80 +4138,90 @@ ${mensagem || ""}`));
       console.error("Erro ao remover imagem do IndexedDB:", e);
     }
   }
-  async function inicializarArmazenamento() {
+  function lerLocalStorage() {
     try {
-      let dados = await idbGet("current_state");
+      const raw = localStorage.getItem(STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch (e) {
+      console.warn("localStorage ileg\xEDvel:", e);
+      return null;
+    }
+  }
+  function aplicarDadosCarregados(dados) {
+    setAppState({
+      settings: { ...DEFAULT_STATE.settings, ...dados.settings || {} },
+      sprints: Array.isArray(dados.sprints) ? dados.sprints : [],
+      tasks: Array.isArray(dados.tasks) ? dados.tasks : [],
+      history: Array.isArray(dados.history) ? dados.history : []
+    });
+  }
+  async function inicializarArmazenamento() {
+    const local = lerLocalStorage();
+    let doIDB = null;
+    try {
+      doIDB = await idbGet("current_state");
       idbConectado = true;
-      if (!dados) {
-        const rawLocal = localStorage.getItem(STORAGE_KEY);
-        if (rawLocal) {
-          try {
-            const parsed = JSON.parse(rawLocal);
-            if (parsed && typeof parsed === "object") {
-              dados = parsed;
-              await idbSet("current_state", dados);
-              console.info("Scrumban: Dados migrados com sucesso do localStorage para o IndexedDB.");
-            }
-          } catch (eMig) {
-            console.warn("Erro ao migrar dados legados do localStorage:", eMig);
-          }
-        }
-      }
-      if (dados && typeof dados === "object") {
-        setAppState({
-          settings: { ...DEFAULT_STATE.settings, ...dados.settings || {} },
-          sprints: Array.isArray(dados.sprints) ? dados.sprints : [],
-          tasks: Array.isArray(dados.tasks) ? dados.tasks : [],
-          history: Array.isArray(dados.history) ? dados.history : []
-        });
-      } else {
-        await idbSet("current_state", appState);
-      }
     } catch (err) {
       console.warn("IndexedDB inacess\xEDvel, utilizando fallback localStorage:", err);
       idbConectado = false;
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          setAppState({
-            settings: { ...DEFAULT_STATE.settings, ...parsed.settings || {} },
-            sprints: Array.isArray(parsed.sprints) ? parsed.sprints : [],
-            tasks: Array.isArray(parsed.tasks) ? parsed.tasks : [],
-            history: Array.isArray(parsed.history) ? parsed.history : []
-          });
-        }
-      } catch (e2) {
-        console.error("Fallback localStorage tamb\xE9m falhou:", e2);
-      }
     }
+    let dados = doIDB && typeof doIDB === "object" ? doIDB : null;
+    if (local && (!dados || (local.savedAt || "") > (dados.savedAt || ""))) {
+      if (dados) console.info("Scrumban: c\xF3pia do localStorage \xE9 mais recente que a do IndexedDB; usando-a.");
+      dados = local;
+    }
+    if (dados) aplicarDadosCarregados(dados);
     garantirOrdemTarefas();
+    if (idbConectado && dados !== doIDB) await saveState();
   }
   var observadoresSalvamento = /* @__PURE__ */ new Set();
   function registrarObservadorSalvamento(fn) {
     if (typeof fn === "function") observadoresSalvamento.add(fn);
   }
-  async function saveState() {
+  var filaSalvamento = Promise.resolve();
+  var ultimoErroSalvamentoMostrado = 0;
+  async function gravarEstado() {
+    const savedAt = (/* @__PURE__ */ new Date()).toISOString();
+    const copia = { ...appState, savedAt };
+    let localOk = false;
     try {
-      if (idbConectado) {
-        await idbSet("current_state", appState);
-      }
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
-      } catch (_) {
-      }
-      agendarBackupAutomatico();
-      observadoresSalvamento.forEach((fn) => {
-        try {
-          fn();
-        } catch (eObs) {
-          console.warn("Observador de salvamento falhou:", eObs);
-        }
-      });
-    } catch (e) {
-      console.error("Falha ao salvar dados:", e);
-      mostrarToast("Erro ao salvar dados localmente. Verifique o espa\xE7o em disco do navegador.", "erro", 6e3);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(copia));
+      localOk = true;
+    } catch (_) {
     }
+    let idbOk = !idbConectado;
+    if (idbConectado) {
+      try {
+        await idbSet("current_state", copia);
+        idbOk = true;
+      } catch (e) {
+        console.error("Falha ao salvar no IndexedDB:", e);
+      }
+    }
+    if (!localOk && !idbOk) {
+      if (Date.now() - ultimoErroSalvamentoMostrado > 1e4) {
+        ultimoErroSalvamentoMostrado = Date.now();
+        mostrarToast("Erro ao salvar dados localmente. Verifique o espa\xE7o em disco.", "erro", 6e3);
+      }
+      return;
+    }
+    agendarBackupAutomatico();
+    observadoresSalvamento.forEach((fn) => {
+      try {
+        fn();
+      } catch (eObs) {
+        console.warn("Observador de salvamento falhou:", eObs);
+      }
+    });
+  }
+  function saveState() {
+    filaSalvamento = filaSalvamento.then(gravarEstado, gravarEstado);
+    return filaSalvamento;
+  }
+  function aguardarSalvamentos() {
+    return filaSalvamento.catch(() => {
+    });
   }
   function atualizarIndicadorArmazenamento() {
     const label = document.getElementById("storage-type-label");
@@ -4529,12 +4618,19 @@ ${mensagem || ""}`));
     inicializarEventosModais();
     inicializarAtalhosTeclado();
     inicializarComportamentoDatas();
+    inicializarTecladoModalTarefa();
     atualizarFiltrosUI();
     inicializarFiltros();
     renderizarQuadro();
     verificarLembreteBackup();
     inicializarSync();
-    inicializarDesktop({ aoRestaurarBackup: restaurarBackupAutomatico });
+    inicializarDesktop({
+      aoRestaurarBackup: restaurarBackupAutomatico,
+      aoFechar: async () => {
+        await aguardarSalvamentos();
+        await executarBackupPendente();
+      }
+    });
     renderizarConfigDesktop();
     requestAnimationFrame(() => mostrarJanela());
   }
